@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch, h, ref } from 'vue'
+import { computed, watch, h, ref, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -15,6 +15,8 @@ import {
   NPopover,
   NList,
   NListItem,
+  NDrawer,
+  NDrawerContent,
   darkTheme,
   type GlobalThemeOverrides,
   zhCN,
@@ -34,7 +36,8 @@ import {
   MoonOutline,
   LanguageOutline,
   SettingsOutline,
-  CheckmarkOutline
+  CheckmarkOutline,
+  MenuOutline
 } from '@vicons/ionicons5'
 import { useConfigStore } from './stores/config'
 
@@ -45,6 +48,24 @@ const configStore = useConfigStore()
 
 // Settings popover state
 const showSettingsPopover = ref(false)
+
+// Mobile menu state
+const showMobileMenu = ref(false)
+const isMobile = ref(false)
+
+// Check if mobile viewport
+function checkMobile() {
+  isMobile.value = window.innerWidth < 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
 
 // Theme configuration
 const isDark = computed(() => configStore.theme === 'dark')
@@ -118,6 +139,7 @@ const activeKey = computed(() => route.name as string)
 
 function handleMenuUpdate(key: string) {
   router.push({ name: key })
+  showMobileMenu.value = false
 }
 
 // Language dropdown
@@ -170,12 +192,20 @@ watch(isDark, (dark) => {
         <!-- Header -->
         <NLayoutHeader class="app-header glass-nav" bordered>
           <div class="header-content">
+            <!-- Mobile menu button -->
+            <NButton v-if="isMobile" quaternary circle class="mobile-menu-btn" @click="showMobileMenu = true">
+              <template #icon>
+                <MenuOutline />
+              </template>
+            </NButton>
+
             <div class="logo">
               <span class="logo-icon">◆</span>
               <span class="logo-text">Media Client</span>
             </div>
 
             <NMenu
+              v-if="!isMobile"
               mode="horizontal"
               :options="menuOptions"
               :value="activeKey"
@@ -257,6 +287,48 @@ watch(isDark, (dark) => {
           </RouterView>
         </NLayoutContent>
       </NLayout>
+
+      <!-- Mobile Navigation Drawer -->
+      <NDrawer v-model:show="showMobileMenu" placement="left" :width="280">
+        <NDrawerContent :title="'Media Client'" closable>
+          <NMenu
+            mode="vertical"
+            :options="menuOptions"
+            :value="activeKey"
+            @update:value="handleMenuUpdate"
+            class="mobile-nav-menu"
+          />
+          <div class="mobile-menu-footer">
+            <NSpace vertical :size="12">
+              <NButton block @click="goToSettings(); showMobileMenu = false">
+                <template #icon>
+                  <SettingsOutline />
+                </template>
+                {{ t('nav.settings') }}
+              </NButton>
+              <div class="mobile-menu-actions">
+                <NDropdown
+                  :options="languageOptions"
+                  @select="handleLanguageSelect"
+                  trigger="click"
+                >
+                  <NButton quaternary>
+                    <template #icon>
+                      <LanguageOutline />
+                    </template>
+                  </NButton>
+                </NDropdown>
+                <NButton quaternary @click="toggleTheme">
+                  <template #icon>
+                    <MoonOutline v-if="isDark" />
+                    <SunnyOutline v-else />
+                  </template>
+                </NButton>
+              </div>
+            </NSpace>
+          </div>
+        </NDrawerContent>
+      </NDrawer>
     </div>
     </NMessageProvider>
   </NConfigProvider>
@@ -439,5 +511,44 @@ watch(isDark, (dark) => {
 .active-indicator svg {
   width: 14px;
   height: 14px;
+}
+
+/* Mobile styles */
+.mobile-menu-btn {
+  margin-right: 8px;
+}
+
+.mobile-nav-menu {
+  margin: 0 -16px;
+}
+
+.mobile-menu-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.mobile-menu-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .header-content {
+    padding: 0 12px;
+  }
+
+  .logo-text {
+    font-size: 16px;
+  }
+
+  .app-content {
+    padding: 12px;
+  }
 }
 </style>

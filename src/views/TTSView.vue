@@ -321,7 +321,7 @@ onUnmounted(() => {
                   :value="configStore.activePresetId"
                   :options="presetOptions"
                   @update:value="configStore.setActivePreset"
-                  style="flex: 1"
+                  style="flex: 1; min-width: 180px"
                 />
                 <NTooltip>
                   <template #trigger>
