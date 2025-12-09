@@ -191,6 +191,16 @@ function handleTouchStart() {
   resetToolbarTimer()
 }
 
+// 阻止触摸移动事件传播到背景页面
+function handleTouchMove(e: TouchEvent) {
+  // 仅当触摸事件发生在字幕容器外时阻止默认行为
+  const target = e.target as HTMLElement
+  const container = containerRef.value
+  if (container && !container.contains(target)) {
+    e.preventDefault()
+  }
+}
+
 // 切换全屏
 async function toggleFullscreen() {
   if (!document.fullscreenElement) {
@@ -269,12 +279,43 @@ function handleFullscreenChange() {
   isFullscreen.value = !!document.fullscreenElement
 }
 
+// 锁定 body 滚动
+function lockBodyScroll() {
+  document.body.style.overflow = 'hidden'
+  document.body.style.position = 'fixed'
+  document.body.style.width = '100%'
+  document.body.style.top = `-${window.scrollY}px`
+}
+
+// 解锁 body 滚动
+function unlockBodyScroll() {
+  const scrollY = document.body.style.top
+  document.body.style.overflow = ''
+  document.body.style.position = ''
+  document.body.style.width = ''
+  document.body.style.top = ''
+  window.scrollTo(0, parseInt(scrollY || '0') * -1)
+}
+
+// 监听 show 状态变化，锁定/解锁滚动
+watch(() => props.show, (newShow) => {
+  if (newShow) {
+    lockBodyScroll()
+  } else {
+    unlockBodyScroll()
+  }
+}, { immediate: true })
+
 onMounted(() => {
   loadDisplaySettings()
   loadConfig()
   requestWakeLock()
   resetToolbarTimer()
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  // 如果组件挂载时已经显示，锁定滚动
+  if (props.show) {
+    lockBodyScroll()
+  }
 })
 
 onUnmounted(() => {
@@ -283,6 +324,8 @@ onUnmounted(() => {
     clearTimeout(toolbarTimer.value)
   }
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  // 组件卸载时解锁滚动
+  unlockBodyScroll()
 })
 
 // 获取最近的字幕（用于大字显示）
@@ -314,6 +357,7 @@ const currentSubtitle = computed(() => {
         :class="{ 'toolbar-hidden': !showToolbar }"
         @mousemove="handleMouseMove"
         @touchstart="handleTouchStart"
+        @touchmove.prevent="handleTouchMove"
         @click="resetToolbarTimer"
       >
         <!-- 背景 -->
@@ -474,7 +518,7 @@ const currentSubtitle = computed(() => {
         </Transition>
 
         <!-- 设置抽屉 -->
-        <NDrawer v-model:show="showSettings" placement="right" :width="320">
+        <NDrawer v-model:show="showSettings" placement="right" :width="320" :z-index="10001">
           <NDrawerContent :title="t('realtime.fullscreen.settings')">
             <NForm label-placement="top" size="small">
               <!-- 显示设置 -->
@@ -612,7 +656,7 @@ const currentSubtitle = computed(() => {
   right: 0;
   bottom: 0;
   background: linear-gradient(180deg, #0a0a1a 0%, #1a1a2e 50%, #0f0f1f 100%);
-  z-index: -1;
+  z-index: 0;
 }
 
 /* 工具栏 */
@@ -626,7 +670,7 @@ const currentSubtitle = computed(() => {
   justify-content: space-between;
   align-items: center;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
-  z-index: 10;
+  z-index: 100;
 }
 
 .status-indicator {
@@ -668,6 +712,10 @@ const currentSubtitle = computed(() => {
   flex-direction: column;
   padding: 80px 40px 60px;
   overflow-y: auto;
+  position: relative;
+  z-index: 1;
+  -webkit-overflow-scrolling: touch; /* 提升移动端滚动体验 */
+  overscroll-behavior: contain; /* 防止滚动穿透 */
 }
 
 .subtitle-container.position-top {
@@ -786,6 +834,7 @@ const currentSubtitle = computed(() => {
   padding: 12px 20px;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
   text-align: center;
+  z-index: 100;
 }
 
 .info-tag {
