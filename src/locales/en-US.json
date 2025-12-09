@@ -1,0 +1,401 @@
+{
+  "nav": {
+    "video": "Video",
+    "image": "Image",
+    "audio": "Transcribe",
+    "tts": "Text-to-Speech",
+    "realtime": "Realtime",
+    "moderation": "Moderation",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "common": {
+    "baseUrl": "Base URL",
+    "apiKey": "API Key",
+    "model": "Model",
+    "custom": "Custom",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "download": "Download",
+    "status": "Status",
+    "progress": "Progress",
+    "error": "Error",
+    "success": "Success",
+    "pending": "Pending",
+    "processing": "Processing",
+    "completed": "Completed",
+    "failed": "Failed",
+    "query": "Query",
+    "fetch": "Fetch",
+    "taskId": "Task ID",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "add": "Add",
+    "placeholder": {
+      "apiKey": "Enter API Key",
+      "customUrl": "https://your-api.com",
+      "taskId": "Enter Task ID"
+    }
+  },
+  "video": {
+    "title": "Sora Video Generation",
+    "subtitle": "Generate high-quality videos with AI",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Describe the video you want to generate...",
+    "seconds": "Duration",
+    "size": "Resolution",
+    "referenceImage": "Reference Image (Optional)",
+    "generate": "Generate Video",
+    "queryStatus": "Query Status",
+    "fetchVideo": "Fetch Video",
+    "videoReady": "Video Ready",
+    "generating": "Generating video...",
+    "polling": "Polling task status...",
+    "imageSizeMismatch": "Reference image resolution ({actual}) doesn't match video resolution ({expected})!"
+  },
+  "image": {
+    "title": "Image Generation",
+    "subtitle": "Generate and edit high-quality images with AI models",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Describe the image you want to generate...",
+    "referenceImages": "Reference Images (Optional, max 9)",
+    "imageSize": "Image Size",
+    "aspectRatio": "Aspect Ratio",
+    "outputFormat": "Output Format",
+    "personGeneration": "Person Generation",
+    "temperature": "Temperature",
+    "topP": "Top P",
+    "maxTokens": "Max Tokens",
+    "generate": "Generate Image",
+    "generating": "Generating image...",
+    "imageReady": "Image Ready",
+    "format": {
+      "aiStudio": "AI Studio Format",
+      "vertex": "Vertex Format"
+    },
+    "personOptions": {
+      "allowAll": "Allow All",
+      "allowAdult": "Adults Only",
+      "dontAllow": "Don't Allow"
+    },
+    "aspectRatios": {
+      "auto": "Auto",
+      "square": "Square",
+      "landscape": "Landscape",
+      "portrait": "Portrait",
+      "phone": "Phone",
+      "ultraWide": "Ultra Wide",
+      "ultraTall": "Ultra Tall"
+    }
+  },
+  "history": {
+    "title": "History",
+    "subtitle": "View and manage generation history",
+    "empty": "No history yet",
+    "clearAll": "Clear All",
+    "filter": {
+      "all": "All",
+      "video": "Video",
+      "image": "Image",
+      "audio": "Audio"
+    },
+    "reload": "Reload Parameters",
+    "delete": "Delete",
+    "createdAt": "Created At"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage provider presets, prompt templates and app configuration",
+    "tabs": {
+      "providers": "Provider Presets",
+      "templates": "Prompt Templates",
+      "backup": "Backup & Restore"
+    },
+    "providerPresets": "Provider Presets",
+    "addPreset": "Add Preset",
+    "editPreset": "Edit Preset",
+    "noPresets": "No presets yet",
+    "presetName": "Preset Name",
+    "active": "Active",
+    "activate": "Activate",
+    "notSet": "Not set",
+    "presetAdded": "Preset added",
+    "presetUpdated": "Preset updated",
+    "promptTemplates": "Prompt Templates",
+    "addTemplate": "Add Template",
+    "editTemplate": "Edit Template",
+    "noTemplates": "No templates yet",
+    "templateName": "Template Name",
+    "templateType": "Apply To",
+    "templateAdded": "Template added",
+    "templateUpdated": "Template updated",
+    "templateTypes": {
+      "video": "Video Only",
+      "image": "Image Only",
+      "audio": "Audio Only",
+      "both": "Both"
+    },
+    "importExport": "Import/Export",
+    "backupDescription": "Export all settings (including provider presets, prompt templates, theme preferences) to a JSON file, or restore from a backup file.",
+    "export": "Export Settings",
+    "import": "Import Settings",
+    "exported": "Settings exported",
+    "imported": "Settings imported",
+    "confirmDelete": "Are you sure you want to delete?",
+    "errors": {
+      "fillRequired": "Please fill in required fields",
+      "cannotDeleteLast": "Cannot delete the last preset",
+      "importFailed": "Import failed, please check file format"
+    },
+    "placeholders": {
+      "presetName": "e.g., My API",
+      "templateName": "e.g., Landscape Video",
+      "templatePrompt": "Enter your commonly used prompt..."
+    }
+  },
+  "errors": {
+    "missingApiKey": "Please enter API Key",
+    "missingPrompt": "Please enter prompt",
+    "missingTaskId": "Please enter Task ID",
+    "missingModel": "Please select or enter a model",
+    "invalidSize": "Invalid resolution format, use WxH format",
+    "networkError": "Network request failed",
+    "apiError": "API Error: {message}"
+  },
+  "audio": {
+    "title": "Audio Transcription",
+    "subtitle": "Convert audio to text using Whisper and GPT-4o models, with word-level sync and speaker diarization",
+    "audioFile": "Audio File",
+    "selectFile": "Select File",
+    "language": "Language",
+    "responseFormat": "Output Format",
+    "timestampGranularities": "Timestamp Granularities",
+    "temperature": "Temperature",
+    "prompt": "Prompt (Optional)",
+    "promptPlaceholder": "Optional prompt to guide the model's style or continue a previous audio segment...",
+    "transcribe": "Transcribe",
+    "result": "Transcription Result",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "copyFailed": "Copy failed",
+    "transcriptionComplete": "Transcription complete",
+    "waitingForAudio": "Waiting for audio file...",
+    "detectedLanguage": "Detected Language",
+    "duration": "Duration",
+    "segments": "Segments",
+    "words": "Words",
+    "wordTimestamps": "Word Timestamps",
+    "supportedFormats": "Supported Formats",
+    "maxFileSize": "Max file size: 25MB",
+    "player": "Audio Player",
+    "syncSubtitles": "Sync Subtitles",
+    "fullText": "Full Text",
+    "recommendedForSync": "Recommended for sync",
+    "syncTip": "Use Verbose JSON format with Word timestamp granularity enabled for word-level synchronized subtitles",
+    "diarization": "Speaker Diarization",
+    "chunkingStrategy": "Chunking Strategy",
+    "vadThreshold": "VAD Threshold",
+    "vadPrefixPadding": "Prefix Padding",
+    "vadSilenceDuration": "Silence Duration",
+    "knownSpeakers": "Known Speakers",
+    "speakerNamePlaceholder": "Speaker name",
+    "speakerHint": "Add up to 4 known speakers to help identify specific people",
+    "speakerReferences": "Reference Audio",
+    "uploadReferences": "Upload References",
+    "speakerLabels": "Speaker Labels",
+    "speakerSegments": "Speaker Segments",
+    "models": {
+      "whisper1Desc": "Classic Whisper model, multilingual with timestamps",
+      "gpt4oTranscribeDesc": "GPT-4o transcription model, higher accuracy",
+      "gpt4oMiniTranscribeDesc": "GPT-4o Mini transcription model, faster",
+      "gpt4oTranscribeDiarizeDesc": "GPT-4o transcription model with speaker diarization"
+    },
+    "languages": {
+      "auto": "Auto Detect"
+    },
+    "errors": {
+      "missingAudioFile": "Please select an audio file"
+    }
+  },
+  "tts": {
+    "title": "Text-to-Speech",
+    "subtitle": "Convert text to natural-sounding speech using advanced AI models",
+    "voice": "Voice",
+    "inputText": "Input Text",
+    "inputPlaceholder": "Enter the text you want to convert to speech...",
+    "instructions": "Instructions (Optional)",
+    "instructionsPlaceholder": "Guide the model's voice style, tone, pacing, etc...",
+    "outputFormat": "Output Format",
+    "speed": "Speed",
+    "generate": "Generate Speech",
+    "player": "Audio Player",
+    "speechReady": "Speech generated successfully",
+    "waitingForInput": "Enter text and click generate...",
+    "voiceInfo": "Voice Options",
+    "voiceInfoText": "Each voice has unique characteristics. Try different voices to find the best fit.",
+    "models": {
+      "gpt4oMiniTtsDesc": "Latest TTS model with emotional control via instructions",
+      "tts1Desc": "Standard TTS model, optimized for speed",
+      "tts1HdDesc": "HD TTS model, higher quality audio"
+    },
+    "errors": {
+      "missingInput": "Please enter text to convert"
+    }
+  },
+  "dalle": {
+    "title": "DALL·E Image Generation",
+    "subtitle": "Generate and edit images using OpenAI's DALL·E and GPT Image models",
+    "mode": "Mode",
+    "modeGenerate": "Generate",
+    "modeEdit": "Edit",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Describe the image you want to generate...",
+    "referenceImages": "Reference Images",
+    "mask": "Mask Image",
+    "uploadMask": "Upload Mask (PNG)",
+    "size": "Size",
+    "quality": "Quality",
+    "background": "Background",
+    "outputFormat": "Output Format",
+    "compression": "Compression",
+    "numberOfImages": "Number of Images",
+    "moderation": "Moderation",
+    "generate": "Generate",
+    "edit": "Edit Image",
+    "result": "Result",
+    "revisedPrompt": "Revised Prompt",
+    "imageReady": "Image generated successfully",
+    "waitingForPrompt": "Enter a prompt and click generate...",
+    "qualityOptions": {
+      "auto": "Auto",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "backgroundOptions": {
+      "auto": "Auto",
+      "transparent": "Transparent",
+      "opaque": "Opaque"
+    },
+    "moderationOptions": {
+      "auto": "Auto",
+      "low": "Low"
+    },
+    "models": {
+      "gptImage1Desc": "Latest image model with transparency and quality options",
+      "dalle3Desc": "DALL·E 3, highest quality with prompt enhancement",
+      "dalle2Desc": "DALL·E 2, classic model with edit support"
+    }
+  },
+  "flux": {
+    "title": "Flux Image Generation",
+    "subtitle": "Generate and edit images using Flux Kontext models",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Describe the image you want to generate or modify...",
+    "inputImage": "Input Image (Optional)",
+    "inputImageUrl": "Image URL",
+    "inputImageUrlPlaceholder": "https://example.com/image.jpg",
+    "uploadInputImage": "Upload Image",
+    "selectImage": "Select Image",
+    "aspectRatio": "Aspect Ratio",
+    "outputFormat": "Output Format",
+    "seed": "Seed",
+    "seedPlaceholder": "Leave empty for random",
+    "safetyTolerance": "Safety Tolerance",
+    "safetyLevels": {
+      "strict": "Strict",
+      "loose": "Loose"
+    },
+    "promptUpsampling": "Prompt Upsampling",
+    "generate": "Generate Image",
+    "imageReady": "Image generated successfully",
+    "aspectRatios": {
+      "matchInput": "Match Input Image",
+      "square": "Square",
+      "landscape": "Landscape",
+      "portrait": "Portrait",
+      "phone": "Phone",
+      "ultraWide": "Ultra Wide",
+      "ultraTall": "Ultra Tall"
+    },
+    "models": {
+      "kontextProDesc": "Flux Kontext Pro, high-quality image editing and generation",
+      "kontextMaxDesc": "Flux Kontext Max, highest quality output"
+    }
+  },
+  "moderation": {
+    "title": "Content Moderation",
+    "subtitle": "Analyze text and images for potentially harmful content",
+    "inputMode": "Input Mode",
+    "textOnly": "Text Only",
+    "multimodal": "Text + Image",
+    "textInput": "Text Input",
+    "textPlaceholder": "Enter text to analyze for content safety...",
+    "imageUrl": "Image URL",
+    "imageUrlPlaceholder": "https://example.com/image.jpg",
+    "uploadImage": "Upload Image",
+    "selectImage": "Select Image",
+    "analyze": "Analyze Content",
+    "result": "Analysis Result",
+    "categories": "Moderation Categories",
+    "flagged": "Content Flagged",
+    "passed": "Content Safe",
+    "waitingForInput": "Enter content to analyze...",
+    "clear": "Clear",
+    "models": {
+      "omniDesc": "Latest multimodal moderation model (text + images)",
+      "textDesc": "Legacy text-only moderation model"
+    },
+    "errors": {
+      "missingInput": "Please enter text or upload an image"
+    }
+  },
+  "realtime": {
+    "title": "Realtime Voice",
+    "subtitle": "Have a real-time voice conversation with AI, or use as meeting assistant for live transcription",
+    "mode": "Mode",
+    "modeConversation": "Conversation",
+    "modeTranscription": "Transcription",
+    "voice": "Voice",
+    "instructions": "System Instructions",
+    "instructionsPlaceholder": "Optional instructions to guide the AI's behavior...",
+    "temperature": "Temperature",
+    "maxTokens": "Max Tokens",
+    "vadEnabled": "Voice Detection",
+    "vadThreshold": "VAD Threshold",
+    "vadSilence": "Silence Duration",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "send": "Send",
+    "commit": "Commit",
+    "clearHistory": "Clear",
+    "export": "Export",
+    "exportSuccess": "Transcript exported successfully",
+    "conversation": "Conversation",
+    "transcript": "Live Subtitles",
+    "connected": "Connected",
+    "connecting": "Connecting...",
+    "disconnected": "Disconnected",
+    "listening": "Listening...",
+    "speaking": "Speaking...",
+    "waitingForInput": "Connect to start voice conversation",
+    "waitingForTranscription": "Connect to start live transcription",
+    "hint": "Click Connect button to establish WebSocket connection with Realtime API",
+    "transcriptionHint": "In transcription mode, AI will only convert speech to text without participating in conversation",
+    "you": "You",
+    "assistant": "Assistant",
+    "models": {
+      "gptRealtimeDesc": "Latest GPT Realtime model with enhanced voice capabilities",
+      "gptRealtimeMiniDesc": "Compact and fast realtime model",
+      "gpt4oRealtimeDesc": "GPT-4o Realtime model with voice capabilities",
+      "gpt4oMiniRealtimeDesc": "Faster, cost-effective realtime model"
+    },
+    "errors": {
+      "connectionFailed": "Failed to connect to Realtime API",
+      "connectionClosed": "Connection closed",
+      "audioCaptureFailed": "Failed to start audio capture",
+      "abnormalClose": "Connection abnormally closed, please check API URL and key"
+    }
+  }
+}

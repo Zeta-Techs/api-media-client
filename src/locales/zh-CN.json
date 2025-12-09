@@ -1,0 +1,403 @@
+{
+  "nav": {
+    "video": "视频生成",
+    "image": "图片生成",
+    "audio": "音频转文字",
+    "tts": "文字转语音",
+    "realtime": "实时语音",
+    "moderation": "内容审核",
+    "history": "历史记录",
+    "settings": "设置"
+  },
+  "common": {
+    "baseUrl": "Base URL",
+    "apiKey": "API Key",
+    "model": "模型",
+    "custom": "自定义",
+    "submit": "提交",
+    "cancel": "取消",
+    "download": "下载",
+    "status": "状态",
+    "progress": "进度",
+    "error": "错误",
+    "success": "成功",
+    "pending": "等待中",
+    "processing": "处理中",
+    "completed": "已完成",
+    "failed": "失败",
+    "query": "查询",
+    "fetch": "获取",
+    "taskId": "任务 ID",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "add": "添加",
+    "placeholder": {
+      "apiKey": "请输入 API Key",
+      "customUrl": "https://your-api.com",
+      "taskId": "请输入任务 ID"
+    }
+  },
+  "video": {
+    "title": "Sora 视频生成",
+    "subtitle": "使用 AI 生成高质量视频",
+    "prompt": "提示词",
+    "promptPlaceholder": "描述你想要生成的视频内容...",
+    "seconds": "时长",
+    "size": "分辨率",
+    "referenceImage": "参考图 (可选)",
+    "generate": "生成视频",
+    "queryStatus": "查询状态",
+    "fetchVideo": "获取视频",
+    "videoReady": "视频已就绪",
+    "generating": "视频生成中...",
+    "polling": "正在轮询任务状态...",
+    "imageSizeMismatch": "参考图分辨率 ({actual}) 与视频分辨率 ({expected}) 不一致！"
+  },
+  "image": {
+    "title": "图片生成",
+    "subtitle": "使用 AI 模型生成和编辑高质量图片",
+    "prompt": "提示词",
+    "promptPlaceholder": "描述你想要生成的图片内容...",
+    "referenceImages": "参考图 (可选，最多9张)",
+    "imageSize": "图片尺寸",
+    "aspectRatio": "宽高比",
+    "outputFormat": "输出格式",
+    "personGeneration": "人物生成",
+    "temperature": "Temperature",
+    "topP": "Top P",
+    "maxTokens": "Max Tokens",
+    "generate": "生成图片",
+    "generating": "图片生成中...",
+    "imageReady": "图片已就绪",
+    "format": {
+      "aiStudio": "AI Studio 格式",
+      "vertex": "Vertex 格式"
+    },
+    "personOptions": {
+      "allowAll": "允许所有",
+      "allowAdult": "仅成人",
+      "dontAllow": "不允许"
+    },
+    "aspectRatios": {
+      "auto": "自动",
+      "square": "正方形",
+      "landscape": "横图",
+      "portrait": "竖图",
+      "phone": "手机屏",
+      "ultraWide": "超宽屏",
+      "ultraTall": "超竖屏"
+    }
+  },
+  "history": {
+    "title": "历史记录",
+    "subtitle": "查看和管理生成历史",
+    "empty": "暂无历史记录",
+    "clearAll": "清空全部",
+    "filter": {
+      "all": "全部",
+      "video": "视频",
+      "image": "图片",
+      "audio": "音频"
+    },
+    "reload": "重新加载参数",
+    "delete": "删除",
+    "createdAt": "创建时间"
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "管理提供商预设、提示词模板和应用配置",
+    "tabs": {
+      "providers": "提供商预设",
+      "templates": "提示词模板",
+      "backup": "备份与恢复"
+    },
+    "providerPresets": "提供商预设",
+    "addPreset": "添加预设",
+    "editPreset": "编辑预设",
+    "noPresets": "暂无预设",
+    "presetName": "预设名称",
+    "active": "当前使用",
+    "activate": "切换到此预设",
+    "notSet": "未设置",
+    "presetAdded": "预设已添加",
+    "presetUpdated": "预设已更新",
+    "promptTemplates": "提示词模板",
+    "addTemplate": "添加模板",
+    "editTemplate": "编辑模板",
+    "noTemplates": "暂无模板",
+    "templateName": "模板名称",
+    "templateType": "适用范围",
+    "templateAdded": "模板已添加",
+    "templateUpdated": "模板已更新",
+    "templateTypes": {
+      "video": "仅视频",
+      "image": "仅图片",
+      "audio": "仅音频",
+      "both": "通用"
+    },
+    "importExport": "导入/导出",
+    "backupDescription": "导出所有设置（包括提供商预设、提示词模板、主题偏好）到 JSON 文件，或从备份文件恢复。",
+    "export": "导出设置",
+    "import": "导入设置",
+    "exported": "设置已导出",
+    "imported": "设置已导入",
+    "confirmDelete": "确定要删除吗？",
+    "errors": {
+      "fillRequired": "请填写必填项",
+      "cannotDeleteLast": "不能删除最后一个预设",
+      "importFailed": "导入失败，请检查文件格式"
+    },
+    "placeholders": {
+      "presetName": "例如：我的 API",
+      "templateName": "例如：风景视频",
+      "templatePrompt": "输入常用的提示词内容..."
+    }
+  },
+  "errors": {
+    "missingApiKey": "请输入 API Key",
+    "missingPrompt": "请输入提示词",
+    "missingTaskId": "请输入任务 ID",
+    "missingModel": "请选择或输入模型",
+    "invalidSize": "分辨率格式错误，请使用 宽x高 格式",
+    "networkError": "网络请求失败",
+    "apiError": "API 错误: {message}"
+  },
+  "audio": {
+    "title": "音频转文字",
+    "subtitle": "使用 Whisper 和 GPT-4o 模型将音频转换为文字，支持单词级别同步字幕和说话人分离",
+    "audioFile": "音频文件",
+    "selectFile": "选择文件",
+    "language": "语言",
+    "responseFormat": "输出格式",
+    "timestampGranularities": "时间戳粒度",
+    "temperature": "Temperature",
+    "prompt": "提示词 (可选)",
+    "promptPlaceholder": "可选的提示词，用于指导模型的风格或继续之前的音频片段...",
+    "transcribe": "开始转录",
+    "result": "转录结果",
+    "copy": "复制",
+    "copied": "已复制到剪贴板",
+    "copyFailed": "复制失败",
+    "transcriptionComplete": "转录完成",
+    "waitingForAudio": "等待上传音频文件...",
+    "detectedLanguage": "检测到的语言",
+    "duration": "时长",
+    "segments": "分段",
+    "words": "单词",
+    "wordTimestamps": "单词时间戳",
+    "supportedFormats": "支持的格式",
+    "maxFileSize": "最大文件大小: 25MB",
+    "player": "音频播放器",
+    "syncSubtitles": "同步字幕",
+    "fullText": "完整文本",
+    "recommendedForSync": "推荐用于同步字幕",
+    "syncTip": "使用 Verbose JSON 格式并勾选 Word 时间戳粒度，可实现单词级别的同步字幕效果",
+    "diarization": "说话人分离设置",
+    "chunkingStrategy": "分段策略",
+    "vadThreshold": "VAD 阈值",
+    "vadPrefixPadding": "前缀填充",
+    "vadSilenceDuration": "静音时长",
+    "knownSpeakers": "已知说话人",
+    "speakerNamePlaceholder": "说话人名称",
+    "speakerHint": "最多添加 4 个已知说话人，可帮助识别特定人员",
+    "speakerReferences": "参考音频",
+    "uploadReferences": "上传参考音频",
+    "speakerLabels": "说话人标签",
+    "speakerSegments": "说话人分段",
+    "models": {
+      "whisper1Desc": "经典 Whisper 模型，支持多语言和时间戳",
+      "gpt4oTranscribeDesc": "GPT-4o 转录模型，更高精度",
+      "gpt4oMiniTranscribeDesc": "GPT-4o Mini 转录模型，更快速",
+      "gpt4oTranscribeDiarizeDesc": "GPT-4o 转录模型，支持说话人分离"
+    },
+    "languages": {
+      "auto": "自动检测"
+    },
+    "errors": {
+      "missingAudioFile": "请选择音频文件"
+    }
+  },
+  "tts": {
+    "title": "文字转语音",
+    "subtitle": "使用先进的 AI 模型将文字转换为自然流畅的语音",
+    "voice": "语音",
+    "inputText": "输入文本",
+    "inputPlaceholder": "输入要转换为语音的文字...",
+    "instructions": "指令 (可选)",
+    "instructionsPlaceholder": "指导模型的语音风格、语调、语速等...",
+    "outputFormat": "输出格式",
+    "speed": "语速",
+    "generate": "生成语音",
+    "player": "音频播放器",
+    "speechReady": "语音生成成功",
+    "waitingForInput": "输入文字后点击生成...",
+    "voiceInfo": "语音选项",
+    "voiceInfoText": "每种语音都有独特的特点，尝试不同的语音找到最适合的。",
+    "models": {
+      "gpt4oMiniTtsDesc": "最新 TTS 模型，支持通过指令控制情感",
+      "tts1Desc": "标准 TTS 模型，速度优先",
+      "tts1HdDesc": "高清 TTS 模型，更高音质"
+    },
+    "errors": {
+      "missingInput": "请输入要转换的文字"
+    }
+  },
+  "dalle": {
+    "title": "DALL·E 图片生成",
+    "subtitle": "使用 OpenAI 的 DALL·E 和 GPT Image 模型生成和编辑图片",
+    "mode": "模式",
+    "modeGenerate": "生成",
+    "modeEdit": "编辑",
+    "prompt": "提示词",
+    "promptPlaceholder": "描述你想要生成的图片...",
+    "referenceImages": "参考图",
+    "mask": "蒙版图",
+    "uploadMask": "上传蒙版 (PNG)",
+    "size": "尺寸",
+    "quality": "质量",
+    "background": "背景",
+    "outputFormat": "输出格式",
+    "compression": "压缩率",
+    "numberOfImages": "图片数量",
+    "moderation": "内容审核",
+    "generate": "生成",
+    "edit": "编辑图片",
+    "result": "结果",
+    "revisedPrompt": "优化后的提示词",
+    "imageReady": "图片生成成功",
+    "waitingForPrompt": "输入提示词后点击生成...",
+    "qualityOptions": {
+      "auto": "自动",
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
+    "backgroundOptions": {
+      "auto": "自动",
+      "transparent": "透明",
+      "opaque": "不透明"
+    },
+    "moderationOptions": {
+      "auto": "自动",
+      "low": "宽松"
+    },
+    "models": {
+      "gptImage1Desc": "最新图像模型，支持透明背景和质量选项",
+      "dalle3Desc": "DALL·E 3，最高质量，自动优化提示词",
+      "dalle2Desc": "DALL·E 2，经典模型，支持编辑功能"
+    }
+  },
+  "flux": {
+    "title": "Flux 图片生成",
+    "subtitle": "使用 Flux Kontext 模型进行图片生成和编辑",
+    "prompt": "提示词",
+    "promptPlaceholder": "描述你想要生成或修改的图片...",
+    "inputImage": "输入图片 (可选)",
+    "inputImageUrl": "图片链接",
+    "inputImageUrlPlaceholder": "https://example.com/image.jpg",
+    "uploadInputImage": "上传图片",
+    "selectImage": "选择图片",
+    "aspectRatio": "宽高比",
+    "outputFormat": "输出格式",
+    "seed": "种子值",
+    "seedPlaceholder": "留空随机生成",
+    "safetyTolerance": "安全容忍度",
+    "safetyLevels": {
+      "strict": "严格",
+      "loose": "宽松"
+    },
+    "promptUpsampling": "提示词增强",
+    "generate": "生成图片",
+    "imageReady": "图片生成成功",
+    "aspectRatios": {
+      "matchInput": "匹配输入图片",
+      "square": "正方形",
+      "landscape": "横图",
+      "portrait": "竖图",
+      "phone": "手机屏",
+      "ultraWide": "超宽屏",
+      "ultraTall": "超竖屏"
+    },
+    "models": {
+      "kontextProDesc": "Flux Kontext Pro，高质量图像编辑和生成",
+      "kontextMaxDesc": "Flux Kontext Max，最高质量输出"
+    }
+  },
+  "moderation": {
+    "title": "内容审核",
+    "subtitle": "分析文本和图片中的潜在有害内容",
+    "inputMode": "输入模式",
+    "textOnly": "仅文本",
+    "multimodal": "文本+图片",
+    "textInput": "文本输入",
+    "textPlaceholder": "输入要分析的文本内容...",
+    "imageUrl": "图片链接",
+    "imageUrlPlaceholder": "https://example.com/image.jpg",
+    "uploadImage": "上传图片",
+    "selectImage": "选择图片",
+    "analyze": "分析内容",
+    "result": "分析结果",
+    "categories": "审核类别",
+    "flagged": "内容被标记",
+    "passed": "内容安全",
+    "waitingForInput": "输入内容后进行分析...",
+    "clear": "清空",
+    "models": {
+      "omniDesc": "最新多模态审核模型 (文本+图片)",
+      "textDesc": "旧版纯文本审核模型"
+    },
+    "errors": {
+      "missingInput": "请输入文本或上传图片"
+    }
+  },
+  "realtime": {
+    "title": "实时语音对话",
+    "subtitle": "通过 WebSocket 与 AI 进行实时语音对话，或作为会议助手实时转写",
+    "mode": "模式",
+    "modeConversation": "语音对话",
+    "modeTranscription": "实时转写",
+    "voice": "语音",
+    "instructions": "系统指令",
+    "instructionsPlaceholder": "可选指令，用于引导 AI 的行为...",
+    "temperature": "Temperature",
+    "maxTokens": "Max Tokens",
+    "vadEnabled": "语音检测",
+    "vadThreshold": "VAD 阈值",
+    "vadSilence": "静音时长",
+    "connect": "连接",
+    "disconnect": "断开",
+    "send": "发送",
+    "commit": "提交",
+    "clearHistory": "清空",
+    "export": "导出",
+    "exportSuccess": "转写内容已导出",
+    "autoScroll": "自动滚动",
+    "language": "语言",
+    "conversation": "对话记录",
+    "transcript": "实时字幕",
+    "connected": "已连接",
+    "connecting": "连接中...",
+    "disconnected": "未连接",
+    "listening": "正在听取...",
+    "speaking": "正在回复...",
+    "waitingForInput": "连接后开始语音对话",
+    "waitingForTranscription": "连接后开始实时转写",
+    "hint": "点击连接按钮建立与实时 API 的 WebSocket 连接",
+    "transcriptionHint": "选择转写模式后，AI 将只进行语音转文字，不会参与对话",
+    "you": "你",
+    "assistant": "助手",
+    "models": {
+      "gptRealtimeDesc": "最新 GPT Realtime 模型，增强语音功能",
+      "gptRealtimeMiniDesc": "紧凑快速的实时模型",
+      "gpt4oRealtimeDesc": "GPT-4o 实时模型，支持语音对话",
+      "gpt4oMiniRealtimeDesc": "更快速、更经济的实时模型"
+    },
+    "errors": {
+      "connectionFailed": "连接实时 API 失败",
+      "connectionClosed": "连接已断开",
+      "audioCaptureFailed": "启动音频捕获失败",
+      "abnormalClose": "连接异常断开，请检查 API 地址和密钥是否正确"
+    }
+  }
+}
