@@ -1075,6 +1075,7 @@ onUnmounted(() => {
           <audio
             ref="audioElement"
             :src="audioUrl"
+            :aria-label="t('audio.player')"
             @loadedmetadata="onAudioLoaded"
             @timeupdate="onTimeUpdate"
             @play="onPlay"
@@ -1082,11 +1083,12 @@ onUnmounted(() => {
             @ended="onEnded"
           />
 
-          <div class="player-controls">
+          <div class="player-controls" role="group" :aria-label="t('audio.player')">
             <NButton
               circle
               type="primary"
               size="large"
+              :aria-label="isPlaying ? t('accessibility.pause') : t('accessibility.play')"
               @click="togglePlay"
             >
               <template #icon>
@@ -1124,10 +1126,10 @@ onUnmounted(() => {
             <div class="result-header">
               <span>{{ t('audio.result') }}</span>
               <NSpace v-if="transcriptionResult">
-                <NButton size="small" @click="handleCopy">
+                <NButton size="small" :aria-label="t('accessibility.copyToClipboard')" @click="handleCopy">
                   {{ t('audio.copy') }}
                 </NButton>
-                <NButton size="small" @click="handleDownload">
+                <NButton size="small" :aria-label="t('accessibility.downloadFile')" @click="handleDownload">
                   {{ t('common.download') }}
                 </NButton>
               </NSpace>

@@ -94,6 +94,9 @@
     "subtitle": "View and manage generation history",
     "empty": "No history yet",
     "clearAll": "Clear All",
+    "confirmClearAll": "Are you sure you want to clear all history?",
+    "confirmDelete": "Are you sure you want to delete this record?",
+    "noPrompt": "(No prompt)",
     "filter": {
       "all": "All",
       "video": "Video",
@@ -161,7 +164,12 @@
     "missingModel": "Please select or enter a model",
     "invalidSize": "Invalid resolution format, use WxH format",
     "networkError": "Network request failed",
-    "apiError": "API Error: {message}"
+    "apiError": "API Error: {message}",
+    "fileTooLarge": "File size ({size}) exceeds limit ({limit})",
+    "invalidFileType": "Unsupported file type: {type}",
+    "tooManyFiles": "Too many files, maximum allowed: {limit}",
+    "retrying": "Request failed, retrying ({attempt}/{max})...",
+    "retryFailed": "Retry failed, please try again later"
   },
   "audio": {
     "title": "Audio Transcription",

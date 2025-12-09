@@ -210,3 +210,154 @@ export interface AudioWord {
 export interface AudioVerboseResponse extends AudioTranscriptionResponse {
   segments: AudioSegment[]
 }
+
+// TTS (Text-to-Speech) types
+export interface TTSFormData {
+  model: string
+  customModel: string
+  voice: string
+  input: string
+  instructions: string
+  responseFormat: string
+  speed: number
+}
+
+export type TTSVoice =
+  | 'alloy'
+  | 'ash'
+  | 'ballad'
+  | 'coral'
+  | 'echo'
+  | 'fable'
+  | 'nova'
+  | 'onyx'
+  | 'sage'
+  | 'shimmer'
+
+export type TTSResponseFormat = 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm'
+
+// Moderation types
+export interface ModerationFormData {
+  model: string
+  input: string
+  imageUrl: string
+  inputMode: 'text' | 'multimodal'
+}
+
+export interface ModerationResponse {
+  id: string
+  model: string
+  results: ModerationResult[]
+}
+
+export interface ModerationResult {
+  flagged: boolean
+  categories: Record<string, boolean>
+  category_scores: Record<string, number>
+  category_applied_input_types?: Record<string, string[]>
+}
+
+export type ModerationCategory =
+  | 'harassment'
+  | 'harassment/threatening'
+  | 'hate'
+  | 'hate/threatening'
+  | 'illicit'
+  | 'illicit/violent'
+  | 'self-harm'
+  | 'self-harm/intent'
+  | 'self-harm/instructions'
+  | 'sexual'
+  | 'sexual/minors'
+  | 'violence'
+  | 'violence/graphic'
+
+// Realtime API types
+export interface RealtimeFormData {
+  model: string
+  customModel: string
+  voice: string
+  instructions: string
+  temperature: number
+  maxTokens: number
+  vadEnabled: boolean
+  vadThreshold: number
+  vadSilenceDuration: number
+  language: string
+}
+
+export type RealtimeVoice =
+  | 'alloy'
+  | 'ash'
+  | 'ballad'
+  | 'coral'
+  | 'echo'
+  | 'sage'
+  | 'shimmer'
+  | 'verse'
+
+export interface RealtimeSessionConfig {
+  model: string
+  voice: RealtimeVoice
+  instructions?: string
+  input_audio_format: 'pcm16' | 'g711_ulaw' | 'g711_alaw'
+  output_audio_format: 'pcm16' | 'g711_ulaw' | 'g711_alaw'
+  input_audio_transcription?: {
+    model: string
+  }
+  turn_detection?: {
+    type: 'server_vad'
+    threshold?: number
+    prefix_padding_ms?: number
+    silence_duration_ms?: number
+  } | null
+  tools?: RealtimeTool[]
+  tool_choice?: 'auto' | 'none' | 'required'
+  temperature?: number
+  max_response_output_tokens?: number | 'inf'
+}
+
+export interface RealtimeTool {
+  type: 'function'
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+export interface RealtimeServerEvent {
+  type: string
+  event_id?: string
+  [key: string]: unknown
+}
+
+export interface RealtimeClientEvent {
+  type: string
+  event_id?: string
+  [key: string]: unknown
+}
+
+// Conversation types
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: Date
+}
+
+// Subtitle types (for realtime transcription)
+export interface SubtitleItem {
+  text: string
+  translated?: string
+  timestamp: Date
+  isFinal: boolean
+  isTranslating?: boolean
+}
+
+// Common status types
+export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+
+// Utility types
+export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
+
+export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>

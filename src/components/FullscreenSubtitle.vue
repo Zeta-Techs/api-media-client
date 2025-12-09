@@ -191,14 +191,27 @@ function handleTouchStart() {
   resetToolbarTimer()
 }
 
-// 阻止触摸移动事件传播到背景页面
+// 处理触摸移动事件
+// 字幕容器内允许滚动，容器外阻止默认行为以防止背景页面滑动
 function handleTouchMove(e: TouchEvent) {
-  // 仅当触摸事件发生在字幕容器外时阻止默认行为
   const target = e.target as HTMLElement
   const container = containerRef.value
-  if (container && !container.contains(target)) {
-    e.preventDefault()
+
+  // 如果触摸在字幕容器内，允许滚动
+  if (container && container.contains(target)) {
+    // 检查是否是字幕内容区域，允许滚动
+    const subtitleContent = container.querySelector('.subtitle-content')
+    const historySubtitles = container.querySelector('.history-subtitles')
+
+    // 允许在有内容时滚动
+    if (subtitleContent || historySubtitles) {
+      // 不阻止默认行为，允许滚动
+      return
+    }
   }
+
+  // 其他区域阻止默认行为
+  e.preventDefault()
 }
 
 // 切换全屏
@@ -328,12 +341,12 @@ onUnmounted(() => {
   unlockBodyScroll()
 })
 
-// 获取最近的字幕（用于大字显示）
-const recentSubtitles = computed(() => {
-  const all = [...props.subtitles]
-  // 取最后 5 条
-  return all.slice(-5)
+// 获取所有字幕（用于显示）
+const allSubtitles = computed(() => {
+  return [...props.subtitles]
 })
+
+// 注意：之前的 recentSubtitles 已移除，现在使用 allSubtitles 显示所有历史字幕
 
 // 当前显示的主字幕
 const currentSubtitle = computed(() => {
@@ -357,7 +370,7 @@ const currentSubtitle = computed(() => {
         :class="{ 'toolbar-hidden': !showToolbar }"
         @mousemove="handleMouseMove"
         @touchstart="handleTouchStart"
-        @touchmove.prevent="handleTouchMove"
+        @touchmove="handleTouchMove"
         @click="resetToolbarTimer"
       >
         <!-- 背景 -->
@@ -443,10 +456,10 @@ const currentSubtitle = computed(() => {
           </div>
 
           <div v-else class="subtitle-content">
-            <!-- 历史字幕（较小） -->
+            <!-- 历史字幕区域（可滚动） -->
             <div class="history-subtitles">
               <div
-                v-for="(item, idx) in recentSubtitles.slice(0, -1)"
+                v-for="(item, idx) in allSubtitles.slice(0, -1)"
                 :key="idx"
                 class="history-item"
                 :style="{ fontSize: currentFontSize.sub }"
@@ -460,7 +473,7 @@ const currentSubtitle = computed(() => {
               </div>
             </div>
 
-            <!-- 当前字幕（大字） -->
+            <!-- 当前字幕（大字，固定在底部） -->
             <div
               v-if="currentSubtitle"
               class="current-subtitle"
@@ -711,11 +724,10 @@ const currentSubtitle = computed(() => {
   display: flex;
   flex-direction: column;
   padding: 80px 40px 60px;
-  overflow-y: auto;
+  overflow: hidden; /* 容器本身不滚动，历史字幕区域滚动 */
   position: relative;
   z-index: 1;
-  -webkit-overflow-scrolling: touch; /* 提升移动端滚动体验 */
-  overscroll-behavior: contain; /* 防止滚动穿透 */
+  min-height: 0; /* 允许 flex 子元素收缩 */
 }
 
 .subtitle-container.position-top {
@@ -748,14 +760,22 @@ const currentSubtitle = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  height: 100%;
+  min-height: 0; /* 允许 flex 子元素收缩 */
 }
 
-/* 历史字幕 */
+/* 历史字幕（可滚动） */
 .history-subtitles {
   display: flex;
   flex-direction: column;
   gap: 12px;
   opacity: 0.6;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
 }
 
 .history-item {
@@ -774,12 +794,16 @@ const currentSubtitle = computed(() => {
   font-style: italic;
 }
 
-/* 当前字幕 */
+/* 当前字幕（固定在底部） */
 .current-subtitle {
   display: flex;
   flex-direction: column;
   gap: 16px;
   text-align: center;
+  flex-shrink: 0; /* 不收缩，保持固定大小 */
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto; /* 推到底部 */
 }
 
 .main-text {

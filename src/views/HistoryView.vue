@@ -102,7 +102,7 @@ function getTypeLabel(type: string): string {
               {{ t('history.clearAll') }}
             </NButton>
           </template>
-          确定要清空所有历史记录吗？
+          {{ t('history.confirmClearAll') }}
         </NPopconfirm>
       </div>
     </div>
@@ -150,14 +150,14 @@ function getTypeLabel(type: string): string {
                       {{ t('history.delete') }}
                     </NButton>
                   </template>
-                  确定要删除这条记录吗？
+                  {{ t('history.confirmDelete') }}
                 </NPopconfirm>
               </NSpace>
             </div>
 
             <div class="item-content">
               <div class="item-prompt">
-                {{ (item.params as any).prompt || '(No prompt)' }}
+                {{ (item.params as any).prompt || t('history.noPrompt') }}
               </div>
               <div class="item-params">
                 {{ getParamsPreview(item) }}

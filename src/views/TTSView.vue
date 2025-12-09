@@ -427,7 +427,7 @@ onUnmounted(() => {
             <div class="player-header">
               <span>{{ t('tts.player') }}</span>
               <NSpace v-if="audioUrl">
-                <NButton size="small" @click="handleDownload">
+                <NButton size="small" :aria-label="t('accessibility.downloadFile')" @click="handleDownload">
                   {{ t('common.download') }}
                 </NButton>
               </NSpace>
@@ -439,6 +439,7 @@ onUnmounted(() => {
               <audio
                 ref="audioElement"
                 :src="audioUrl"
+                :aria-label="t('tts.player')"
                 @loadedmetadata="onAudioLoaded"
                 @timeupdate="onTimeUpdate"
                 @play="onPlay"
@@ -446,11 +447,12 @@ onUnmounted(() => {
                 @ended="onEnded"
               />
 
-              <div class="player-controls">
+              <div class="player-controls" role="group" :aria-label="t('tts.player')">
                 <NButton
                   circle
                   type="primary"
                   size="large"
+                  :aria-label="isPlaying ? t('accessibility.pause') : t('accessibility.play')"
                   @click="togglePlay"
                 >
                   <template #icon>

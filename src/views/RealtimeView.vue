@@ -334,11 +334,21 @@ function handleServerEvent(event: any) {
 
     case 'conversation.item.input_audio_transcription.completed':
       if (event.transcript) {
-        transcripts.value.push({
-          text: event.transcript,
-          timestamp: new Date(),
-          isFinal: true
-        })
+        // 检查是否有临时字幕需要更新为最终字幕
+        const lastTranscript = transcripts.value[transcripts.value.length - 1]
+        if (lastTranscript && !lastTranscript.isFinal) {
+          // 更新临时字幕为最终字幕
+          lastTranscript.text = event.transcript
+          lastTranscript.isFinal = true
+          lastTranscript.timestamp = new Date()
+        } else {
+          // 没有临时字幕，创建新的最终字幕
+          transcripts.value.push({
+            text: event.transcript,
+            timestamp: new Date(),
+            isFinal: true
+          })
+        }
         currentTranscript.value = ''
         scrollToBottom(transcriptContainerRef.value)
       }
@@ -348,6 +358,21 @@ function handleServerEvent(event: any) {
       if (event.delta) {
         currentTranscript.value += event.delta
         scrollToBottom(transcriptContainerRef.value)
+
+        // 实时更新非最终字幕（用于流式显示）
+        // 更新或创建一个临时的非 final 字幕项
+        const lastTranscript = transcripts.value[transcripts.value.length - 1]
+        if (lastTranscript && !lastTranscript.isFinal) {
+          // 更新现有的临时字幕
+          lastTranscript.text = currentTranscript.value
+        } else if (currentTranscript.value) {
+          // 创建新的临时字幕
+          transcripts.value.push({
+            text: currentTranscript.value,
+            timestamp: new Date(),
+            isFinal: false
+          })
+        }
       }
       break
 
