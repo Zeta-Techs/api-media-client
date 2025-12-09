@@ -7,6 +7,7 @@ import {
 } from 'naive-ui'
 import { useConfigStore } from '@/stores/config'
 import { message } from '@/composables/useNaiveMessage'
+import { parseApiError } from '@/utils/api'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
@@ -192,17 +193,6 @@ function formatTime(seconds: number): string {
   const secs = Math.floor(seconds % 60)
   const ms = Math.floor((seconds % 1) * 100)
   return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
-}
-
-// Parse API error
-function parseApiError(text: string, status: number): Error {
-  try {
-    const j = JSON.parse(text)
-    if (j?.error?.message) {
-      return new Error(`API ${status}: ${j.error.message} (${j.error.code || ''})`)
-    }
-  } catch {/* empty */}
-  return new Error(`API ${status}: ${text || 'unknown error'}`)
 }
 
 // Submit TTS
@@ -533,7 +523,7 @@ onUnmounted(() => {
   align-items: stretch;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1024px) {
   .tts-layout {
     grid-template-columns: 1fr;
   }

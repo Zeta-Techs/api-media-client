@@ -9,6 +9,7 @@ import {
 import { useConfigStore } from '@/stores/config'
 import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
+import { parseApiError } from '@/utils/api'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
@@ -208,16 +209,6 @@ async function getVideoContent(id: string, signal?: AbortSignal) {
   return await res.blob()
 }
 
-function parseApiError(text: string, status: number): Error {
-  try {
-    const j = JSON.parse(text)
-    if (j?.error?.message) {
-      return new Error(`API ${status}: ${j.error.message} (${j.error.code || ''})`)
-    }
-  } catch {}
-  return new Error(`API ${status}: ${text || 'unknown error'}`)
-}
-
 // Submit video generation
 async function handleSubmit() {
   if (!configStore.apiKey) {
@@ -265,7 +256,13 @@ async function handleSubmit() {
     queryTaskId.value = id
     taskStatus.value = 'processing'
 
-    while (true) {
+    // 轮询配置：最多等待 15 分钟（300 次 * 3 秒）
+    const MAX_POLL_COUNT = 300
+    const POLL_INTERVAL = 3000
+    let pollCount = 0
+
+    while (pollCount < MAX_POLL_COUNT) {
+      pollCount++
       const st = await getTaskStatus(id, ctrl.signal)
       const status = (st.status || '').toLowerCase()
       const pct = typeof st.progress === 'number' ? st.progress : 0
@@ -290,7 +287,12 @@ async function handleSubmit() {
         throw new Error(st?.error?.message || `Task ${status}`)
       }
 
-      await new Promise(r => setTimeout(r, 3000))
+      // 检查是否超时
+      if (pollCount >= MAX_POLL_COUNT) {
+        throw new Error(t('video.errors.timeout'))
+      }
+
+      await new Promise(r => setTimeout(r, POLL_INTERVAL))
     }
   } catch (e: any) {
     if (e.name === 'AbortError') {

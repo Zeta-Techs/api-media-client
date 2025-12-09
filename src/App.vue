@@ -193,7 +193,15 @@ watch(isDark, (dark) => {
         <NLayoutHeader class="app-header glass-nav" bordered>
           <div class="header-content">
             <!-- Mobile menu button -->
-            <NButton v-if="isMobile" quaternary circle class="mobile-menu-btn" @click="showMobileMenu = true">
+            <NButton
+              v-if="isMobile"
+              quaternary
+              circle
+              class="mobile-menu-btn"
+              @click="showMobileMenu = true"
+              :aria-label="t('accessibility.openMenu')"
+              :title="t('accessibility.openMenu')"
+            >
               <template #icon>
                 <MenuOutline />
               </template>
@@ -260,7 +268,12 @@ watch(isDark, (dark) => {
                 @select="handleLanguageSelect"
                 trigger="click"
               >
-                <NButton quaternary circle>
+                <NButton
+                  quaternary
+                  circle
+                  :aria-label="t('accessibility.changeLanguage')"
+                  :title="t('accessibility.changeLanguage')"
+                >
                   <template #icon>
                     <LanguageOutline />
                   </template>
@@ -268,7 +281,13 @@ watch(isDark, (dark) => {
               </NDropdown>
 
               <!-- Theme toggle -->
-              <NButton quaternary circle @click="toggleTheme">
+              <NButton
+                quaternary
+                circle
+                @click="toggleTheme"
+                :aria-label="isDark ? t('accessibility.switchToLight') : t('accessibility.switchToDark')"
+                :title="isDark ? t('accessibility.switchToLight') : t('accessibility.switchToDark')"
+              >
                 <template #icon>
                   <MoonOutline v-if="isDark" />
                   <SunnyOutline v-else />

@@ -10,6 +10,8 @@ import {
 import { useConfigStore } from '@/stores/config'
 import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
+import { parseApiError } from '@/utils/api'
+import type { GPTImageFormData, FluxFormData, GeminiAIStudioFormData, GeminiVertexFormData } from '@/types'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
@@ -448,16 +450,6 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
   return new Blob([byteArray], { type: mimeType })
 }
 
-function parseApiError(text: string, status: number): Error {
-  try {
-    const j = JSON.parse(text)
-    if (j?.error?.message) {
-      return new Error(`API ${status}: ${j.error.message}`)
-    }
-  } catch {}
-  return new Error(`API ${status}: ${text || 'unknown error'}`)
-}
-
 // ==================== GPT-Image Submit ====================
 async function handleSubmitGPT() {
   if (!configStore.apiKey) {
@@ -581,10 +573,24 @@ async function handleSubmitGPT() {
       }
     }
 
+    const gptParams: GPTImageFormData = {
+      prompt: formGPT.value.prompt,
+      model: formGPT.value.model,
+      customModel: formGPT.value.customModel,
+      format: 'gpt-image',
+      size: formGPT.value.size,
+      quality: formGPT.value.quality,
+      background: formGPT.value.background,
+      outputFormat: formGPT.value.outputFormat,
+      outputCompression: formGPT.value.outputCompression,
+      n: formGPT.value.n,
+      moderation: formGPT.value.moderation,
+      referenceImages: []
+    }
     historyStore.addItem({
       type: 'image',
       status: 'completed',
-      params: { ...formGPT.value, format: 'gpt-image', referenceImages: [] } as any,
+      params: gptParams,
       result: {
         thumbnail: gptImageUrls.value[0]?.substring(0, 100)
       }
@@ -689,10 +695,22 @@ async function handleSubmitFlux() {
       }
     }
 
+    const fluxParams: FluxFormData = {
+      prompt: formFlux.value.prompt,
+      model: formFlux.value.model,
+      customModel: formFlux.value.customModel,
+      format: 'flux',
+      inputImageUrl: formFlux.value.inputImageUrl,
+      aspectRatio: formFlux.value.aspectRatio,
+      outputFormat: formFlux.value.outputFormat,
+      seed: formFlux.value.seed,
+      safetyTolerance: formFlux.value.safetyTolerance,
+      promptUpsampling: formFlux.value.promptUpsampling
+    }
     historyStore.addItem({
       type: 'image',
       status: 'completed',
-      params: { ...formFlux.value, format: 'flux' } as any,
+      params: fluxParams,
       result: {
         thumbnail: fluxImageUrl.value?.substring(0, 100)
       }
@@ -810,10 +828,18 @@ async function handleSubmitAI() {
     imageUrl.value = URL.createObjectURL(blob)
     img.src = imageUrl.value
 
+    const aiStudioParams: GeminiAIStudioFormData = {
+      prompt: formAI.value.prompt,
+      model: formAI.value.model,
+      customModel: formAI.value.customModel,
+      format: 'gemini-ai-studio',
+      imageSize: formAI.value.imageSize,
+      referenceImages: []
+    }
     historyStore.addItem({
       type: 'image',
       status: 'completed',
-      params: { ...formAI.value, format: 'gemini-ai-studio', referenceImages: [] } as any
+      params: aiStudioParams
     })
 
     message.success(t('image.imageReady'))
@@ -909,10 +935,24 @@ async function handleSubmitVertex() {
     imageUrl.value = URL.createObjectURL(blob)
     img.src = imageUrl.value
 
+    const vertexParams: GeminiVertexFormData = {
+      prompt: formVertex.value.prompt,
+      model: formVertex.value.model,
+      customModel: formVertex.value.customModel,
+      format: 'gemini-vertex',
+      imageSize: formVertex.value.imageSize,
+      aspectRatio: formVertex.value.aspectRatio,
+      outputMimeType: formVertex.value.outputMimeType,
+      personGeneration: formVertex.value.personGeneration,
+      temperature: formVertex.value.temperature,
+      topP: formVertex.value.topP,
+      maxOutputTokens: formVertex.value.maxOutputTokens,
+      referenceImages: []
+    }
     historyStore.addItem({
       type: 'image',
       status: 'completed',
-      params: { ...formVertex.value, format: 'gemini-vertex', referenceImages: [] } as any
+      params: vertexParams
     })
 
     message.success(t('image.imageReady'))

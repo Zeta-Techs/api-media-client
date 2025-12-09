@@ -396,6 +396,64 @@
       "connectionClosed": "Connection closed",
       "audioCaptureFailed": "Failed to start audio capture",
       "abnormalClose": "Connection abnormally closed, please check API URL and key"
+    },
+    "fullscreen": {
+      "title": "Fullscreen Subtitles",
+      "settings": "Subtitle Settings",
+      "displaySettings": "Display Settings",
+      "translationSettings": "Translation Settings",
+      "fontSize": "Font Size",
+      "fontSmall": "Small",
+      "fontMedium": "Medium",
+      "fontLarge": "Large",
+      "fontXLarge": "Extra Large",
+      "position": "Position",
+      "posTop": "Top",
+      "posCenter": "Center",
+      "posBottom": "Bottom",
+      "bgOpacity": "Background Opacity",
+      "enableTranslation": "Enable Translation",
+      "targetLanguage": "Target Language",
+      "translationModel": "Translation Model",
+      "bilingualMode": "Bilingual Mode",
+      "showBoth": "Show Both",
+      "showOriginal": "Original Only",
+      "showTranslated": "Translated Only",
+      "originalOnTop": "Original on Top",
+      "useCustomApi": "Use Custom API",
+      "translating": "Translating",
+      "translationOn": "Translation On",
+      "model": "Model",
+      "targetLang": "Target",
+      "subtitleCount": "Subtitles",
+      "enterFullscreen": "Enter Fullscreen",
+      "exitFullscreen": "Exit Fullscreen"
+    }
+  },
+  "accessibility": {
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "changeLanguage": "Change language",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "volumeUp": "Volume up",
+    "volumeDown": "Volume down",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "downloadFile": "Download file",
+    "copyToClipboard": "Copy to clipboard",
+    "expandSection": "Expand section",
+    "collapseSection": "Collapse section",
+    "goToPage": "Go to {page}",
+    "loading": "Loading...",
+    "submit": "Submit"
+  },
+  "video": {
+    "errors": {
+      "timeout": "Task timed out, please query status with Task ID later"
     }
   }
 }

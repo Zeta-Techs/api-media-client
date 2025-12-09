@@ -11,6 +11,7 @@ import {
 import { useConfigStore } from '@/stores/config'
 import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
+import { parseApiError } from '@/utils/api'
 import type { AudioTranscriptionResponse, AudioFormData } from '@/types'
 
 const { t } = useI18n()
@@ -583,17 +584,6 @@ function onSegmentClick(segmentIndex: number) {
       audioElement.value.play()
     }
   }
-}
-
-// Parse API error
-function parseApiError(text: string, status: number): Error {
-  try {
-    const j = JSON.parse(text)
-    if (j?.error?.message) {
-      return new Error(`API ${status}: ${j.error.message} (${j.error.code || ''})`)
-    }
-  } catch {/* empty */}
-  return new Error(`API ${status}: ${text || 'unknown error'}`)
 }
 
 // Submit transcription
@@ -1273,7 +1263,7 @@ onUnmounted(() => {
   align-items: stretch;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1024px) {
   .audio-layout {
     grid-template-columns: 1fr;
   }

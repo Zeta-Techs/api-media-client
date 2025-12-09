@@ -6,8 +6,19 @@ import {
   NAlert, NTag, NTooltip, NSlider, NSwitch,
   NRadioGroup, NRadio
 } from 'naive-ui'
+import { ExpandOutline } from '@vicons/ionicons5'
 import { useConfigStore } from '@/stores/config'
 import { message } from '@/composables/useNaiveMessage'
+import FullscreenSubtitle from '@/components/FullscreenSubtitle.vue'
+
+// 字幕项类型（与 FullscreenSubtitle 组件共享）
+interface SubtitleItem {
+  text: string
+  translated?: string
+  timestamp: Date
+  isFinal: boolean
+  isTranslating?: boolean
+}
 
 const { t } = useI18n()
 const configStore = useConfigStore()
@@ -41,10 +52,13 @@ const errorMessage = ref('')
 const conversation = ref<Array<{ role: 'user' | 'assistant'; content: string; timestamp: Date }>>([])
 
 // Transcription state (for subtitle mode)
-const transcripts = ref<Array<{ text: string; timestamp: Date; isFinal: boolean }>>([])
+const transcripts = ref<SubtitleItem[]>([])
 const currentTranscript = ref('')
 const transcriptContainerRef = ref<HTMLElement | null>(null)
 const conversationContainerRef = ref<HTMLElement | null>(null)
+
+// Fullscreen subtitle state
+const showFullscreenSubtitle = ref(false)
 
 // WebSocket and Audio
 const ws = ref<WebSocket | null>(null)
@@ -638,6 +652,16 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
+// Open fullscreen subtitle
+function openFullscreenSubtitle() {
+  showFullscreenSubtitle.value = true
+}
+
+// Update subtitles from fullscreen component (for translation results)
+function handleSubtitlesUpdate(newSubtitles: SubtitleItem[]) {
+  transcripts.value = newSubtitles
+}
+
 // Watch for form changes when connected
 watch(() => [form.value.voice, form.value.temperature, form.value.vadEnabled, form.value.vadThreshold, form.value.vadSilenceDuration, form.value.language], () => {
   if (isConnected.value) {
@@ -855,6 +879,16 @@ onUnmounted(() => {
                 </template>
                 {{ t('realtime.autoScroll') }}
               </NTooltip>
+              <NTooltip>
+                <template #trigger>
+                  <NButton size="tiny" type="primary" @click="openFullscreenSubtitle">
+                    <template #icon>
+                      <ExpandOutline />
+                    </template>
+                  </NButton>
+                </template>
+                {{ t('realtime.fullscreen.title') }}
+              </NTooltip>
               <NButton size="tiny" @click="clearConversation" :disabled="transcripts.length === 0">
                 {{ t('realtime.clearHistory') }}
               </NButton>
@@ -894,6 +928,16 @@ onUnmounted(() => {
         </div>
       </NCard>
     </div>
+
+    <!-- Fullscreen Subtitle Component -->
+    <FullscreenSubtitle
+      v-model:show="showFullscreenSubtitle"
+      :subtitles="transcripts"
+      :current-text="currentTranscript"
+      :is-connected="isConnected"
+      :is-recording="isRecording"
+      @update:subtitles="handleSubtitlesUpdate"
+    />
   </div>
 </template>
 

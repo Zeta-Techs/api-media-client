@@ -398,6 +398,64 @@
       "connectionClosed": "连接已断开",
       "audioCaptureFailed": "启动音频捕获失败",
       "abnormalClose": "连接异常断开，请检查 API 地址和密钥是否正确"
+    },
+    "fullscreen": {
+      "title": "全屏字幕",
+      "settings": "字幕设置",
+      "displaySettings": "显示设置",
+      "translationSettings": "翻译设置",
+      "fontSize": "字体大小",
+      "fontSmall": "小",
+      "fontMedium": "中",
+      "fontLarge": "大",
+      "fontXLarge": "超大",
+      "position": "字幕位置",
+      "posTop": "顶部",
+      "posCenter": "居中",
+      "posBottom": "底部",
+      "bgOpacity": "背景透明度",
+      "enableTranslation": "启用翻译",
+      "targetLanguage": "目标语言",
+      "translationModel": "翻译模型",
+      "bilingualMode": "双语显示",
+      "showBoth": "显示双语",
+      "showOriginal": "仅显示原文",
+      "showTranslated": "仅显示译文",
+      "originalOnTop": "原文在上",
+      "useCustomApi": "使用独立 API",
+      "translating": "翻译中",
+      "translationOn": "翻译已启用",
+      "model": "模型",
+      "targetLang": "目标语言",
+      "subtitleCount": "字幕条数",
+      "enterFullscreen": "进入全屏",
+      "exitFullscreen": "退出全屏"
+    }
+  },
+  "accessibility": {
+    "openMenu": "打开菜单",
+    "closeMenu": "关闭菜单",
+    "changeLanguage": "切换语言",
+    "switchToLight": "切换到浅色模式",
+    "switchToDark": "切换到深色模式",
+    "play": "播放",
+    "pause": "暂停",
+    "stop": "停止",
+    "volumeUp": "增大音量",
+    "volumeDown": "减小音量",
+    "mute": "静音",
+    "unmute": "取消静音",
+    "downloadFile": "下载文件",
+    "copyToClipboard": "复制到剪贴板",
+    "expandSection": "展开区域",
+    "collapseSection": "收起区域",
+    "goToPage": "跳转到 {page}",
+    "loading": "加载中...",
+    "submit": "提交"
+  },
+  "video": {
+    "errors": {
+      "timeout": "任务超时，请稍后通过任务 ID 查询状态"
     }
   }
 }
