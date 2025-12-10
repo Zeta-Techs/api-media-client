@@ -4,14 +4,194 @@ import { useI18n } from 'vue-i18n'
 import {
   NCard, NForm, NFormItem, NInput, NButton, NSpace, NTabs, NTabPane,
   NList, NListItem, NThing, NPopconfirm, NModal, NSelect, NEmpty,
-  NUpload, NAlert, NTag, type UploadFileInfo
+  NUpload, NAlert, NTag, NSwitch,
+  type UploadFileInfo
 } from 'naive-ui'
 import { useConfigStore } from '@/stores/config'
+import { useStorageStore, type StorageProvider, type StorageProviderType } from '@/stores/storage'
+import { useCloudStorage } from '@/composables/useCloudStorage'
 import { message } from '@/composables/useNaiveMessage'
 import type { ProviderPreset, PromptTemplate } from '@/types'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
+const storageStore = useStorageStore()
+const { testConnection } = useCloudStorage()
+
+// Storage provider form
+const showStorageModal = ref(false)
+const editingStorage = ref<StorageProvider | null>(null)
+const testingConnection = ref(false)
+const storageForm = ref({
+  name: '',
+  type: 'webdav' as StorageProviderType,
+  enabled: true,
+  // WebDAV config
+  webdavEndpoint: '',
+  webdavUsername: '',
+  webdavPassword: '',
+  webdavBasePath: '/uploads/ai-media',
+  // S3 config
+  s3Endpoint: '',
+  s3Region: 'us-east-1',
+  s3Bucket: '',
+  s3AccessKeyId: '',
+  s3SecretAccessKey: '',
+  s3PathPrefix: 'ai-media',
+  s3ForcePathStyle: false,
+  s3PublicUrl: ''
+})
+
+const storageTypeOptions = [
+  { label: 'WebDAV', value: 'webdav' },
+  { label: 'S3 Compatible', value: 's3' }
+]
+
+function openAddStorageModal() {
+  editingStorage.value = null
+  storageForm.value = {
+    name: '',
+    type: 'webdav',
+    enabled: true,
+    webdavEndpoint: '',
+    webdavUsername: '',
+    webdavPassword: '',
+    webdavBasePath: '/uploads/ai-media',
+    s3Endpoint: '',
+    s3Region: 'us-east-1',
+    s3Bucket: '',
+    s3AccessKeyId: '',
+    s3SecretAccessKey: '',
+    s3PathPrefix: 'ai-media',
+    s3ForcePathStyle: false,
+    s3PublicUrl: ''
+  }
+  showStorageModal.value = true
+}
+
+function openEditStorageModal(provider: StorageProvider) {
+  editingStorage.value = provider
+  storageForm.value = {
+    name: provider.name,
+    type: provider.type,
+    enabled: provider.enabled,
+    webdavEndpoint: provider.webdav?.endpoint || '',
+    webdavUsername: provider.webdav?.username || '',
+    webdavPassword: provider.webdav?.password || '',
+    webdavBasePath: provider.webdav?.basePath || '/uploads/ai-media',
+    s3Endpoint: provider.s3?.endpoint || '',
+    s3Region: provider.s3?.region || 'us-east-1',
+    s3Bucket: provider.s3?.bucket || '',
+    s3AccessKeyId: provider.s3?.accessKeyId || '',
+    s3SecretAccessKey: provider.s3?.secretAccessKey || '',
+    s3PathPrefix: provider.s3?.pathPrefix || 'ai-media',
+    s3ForcePathStyle: provider.s3?.forcePathStyle || false,
+    s3PublicUrl: provider.s3?.publicUrl || ''
+  }
+  showStorageModal.value = true
+}
+
+function saveStorage() {
+  if (!storageForm.value.name) {
+    message.error(t('settings.errors.fillRequired'))
+    return
+  }
+
+  const providerData: Omit<StorageProvider, 'id' | 'createdAt' | 'updatedAt'> = {
+    name: storageForm.value.name,
+    type: storageForm.value.type,
+    enabled: storageForm.value.enabled
+  }
+
+  if (storageForm.value.type === 'webdav') {
+    if (!storageForm.value.webdavEndpoint || !storageForm.value.webdavUsername) {
+      message.error(t('settings.errors.fillRequired'))
+      return
+    }
+    providerData.webdav = {
+      endpoint: storageForm.value.webdavEndpoint,
+      username: storageForm.value.webdavUsername,
+      password: storageForm.value.webdavPassword,
+      basePath: storageForm.value.webdavBasePath
+    }
+  } else {
+    if (!storageForm.value.s3Endpoint || !storageForm.value.s3Bucket || !storageForm.value.s3AccessKeyId) {
+      message.error(t('settings.errors.fillRequired'))
+      return
+    }
+    providerData.s3 = {
+      endpoint: storageForm.value.s3Endpoint,
+      region: storageForm.value.s3Region,
+      bucket: storageForm.value.s3Bucket,
+      accessKeyId: storageForm.value.s3AccessKeyId,
+      secretAccessKey: storageForm.value.s3SecretAccessKey,
+      pathPrefix: storageForm.value.s3PathPrefix,
+      forcePathStyle: storageForm.value.s3ForcePathStyle,
+      publicUrl: storageForm.value.s3PublicUrl || undefined
+    }
+  }
+
+  if (editingStorage.value) {
+    storageStore.updateProvider(editingStorage.value.id, providerData)
+    message.success(t('storage.providerUpdated'))
+  } else {
+    storageStore.addProvider(providerData)
+    message.success(t('storage.providerAdded'))
+  }
+  showStorageModal.value = false
+}
+
+function deleteStorage(id: string) {
+  storageStore.removeProvider(id)
+  message.success(t('common.success'))
+}
+
+async function handleTestConnection() {
+  testingConnection.value = true
+
+  // 构建临时 provider 对象用于测试
+  const tempProvider: StorageProvider = {
+    id: 'test',
+    name: storageForm.value.name,
+    type: storageForm.value.type,
+    enabled: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  }
+
+  if (storageForm.value.type === 'webdav') {
+    tempProvider.webdav = {
+      endpoint: storageForm.value.webdavEndpoint,
+      username: storageForm.value.webdavUsername,
+      password: storageForm.value.webdavPassword,
+      basePath: storageForm.value.webdavBasePath
+    }
+  } else {
+    tempProvider.s3 = {
+      endpoint: storageForm.value.s3Endpoint,
+      region: storageForm.value.s3Region,
+      bucket: storageForm.value.s3Bucket,
+      accessKeyId: storageForm.value.s3AccessKeyId,
+      secretAccessKey: storageForm.value.s3SecretAccessKey,
+      pathPrefix: storageForm.value.s3PathPrefix,
+      forcePathStyle: storageForm.value.s3ForcePathStyle,
+      publicUrl: storageForm.value.s3PublicUrl || undefined
+    }
+  }
+
+  try {
+    const result = await testConnection(tempProvider)
+    if (result.success) {
+      message.success(t('storage.connectionSuccess'))
+    } else {
+      message.error(`${t('storage.connectionFailed')}: ${result.message}`)
+    }
+  } catch (e: any) {
+    message.error(`${t('storage.connectionFailed')}: ${e.message}`)
+  } finally {
+    testingConnection.value = false
+  }
+}
 
 // Provider preset form
 const showPresetModal = ref(false)
@@ -302,6 +482,113 @@ function getTypeColor(type: string) {
           </NSpace>
         </NCard>
       </NTabPane>
+
+      <!-- Cloud Storage Tab -->
+      <NTabPane name="storage" :tab="t('settings.tabs.storage')">
+        <NCard class="glass-card">
+          <template #header>
+            <div class="card-header">
+              <span>{{ t('storage.providers') }}</span>
+              <NButton type="primary" size="small" @click="openAddStorageModal">
+                {{ t('storage.addProvider') }}
+              </NButton>
+            </div>
+          </template>
+
+          <NAlert type="info" style="margin-bottom: 16px">
+            {{ t('storage.description') }}
+          </NAlert>
+
+          <NEmpty v-if="storageStore.providers.length === 0" :description="t('storage.noProviders')" />
+
+          <NList v-else hoverable>
+            <NListItem v-for="provider in storageStore.providers" :key="provider.id">
+              <NThing>
+                <template #header>
+                  <NSpace align="center">
+                    <span>{{ provider.name }}</span>
+                    <NTag :type="provider.type === 'webdav' ? 'info' : 'warning'" size="small">
+                      {{ provider.type.toUpperCase() }}
+                    </NTag>
+                    <NTag v-if="provider.enabled" type="success" size="small">
+                      {{ t('common.enabled') }}
+                    </NTag>
+                    <NTag v-if="provider.id === storageStore.uploadSettings.selectedProviderId" type="primary" size="small">
+                      {{ t('storage.active') }}
+                    </NTag>
+                  </NSpace>
+                </template>
+                <template #description>
+                  <div class="storage-info">
+                    <template v-if="provider.type === 'webdav'">
+                      {{ provider.webdav?.endpoint }}
+                    </template>
+                    <template v-else>
+                      {{ provider.s3?.endpoint }} / {{ provider.s3?.bucket }}
+                    </template>
+                  </div>
+                </template>
+                <template #header-extra>
+                  <NSpace>
+                    <NButton
+                      v-if="provider.id !== storageStore.uploadSettings.selectedProviderId && provider.enabled"
+                      size="small"
+                      @click="storageStore.setActiveProvider(provider.id)"
+                    >
+                      {{ t('storage.setActive') }}
+                    </NButton>
+                    <NButton size="small" @click="openEditStorageModal(provider)">
+                      {{ t('common.edit') }}
+                    </NButton>
+                    <NPopconfirm @positive-click="deleteStorage(provider.id)">
+                      <template #trigger>
+                        <NButton size="small" type="error" secondary>
+                          {{ t('common.delete') }}
+                        </NButton>
+                      </template>
+                      {{ t('settings.confirmDelete') }}
+                    </NPopconfirm>
+                  </NSpace>
+                </template>
+              </NThing>
+            </NListItem>
+          </NList>
+        </NCard>
+
+        <!-- Upload Settings Card -->
+        <NCard class="glass-card" style="margin-top: 16px">
+          <template #header>{{ t('storage.uploadSettings') }}</template>
+
+          <NForm label-placement="left" label-width="140">
+            <NFormItem :label="t('storage.autoUpload')">
+              <NSwitch
+                :value="storageStore.uploadSettings.autoUpload"
+                @update:value="storageStore.updateUploadSettings({ autoUpload: $event })"
+              />
+            </NFormItem>
+            <NFormItem :label="t('storage.filenamePattern')">
+              <NInput
+                :value="storageStore.uploadSettings.filenamePattern"
+                @update:value="storageStore.updateUploadSettings({ filenamePattern: $event })"
+                placeholder="{type}/{date}/{filename}"
+              />
+            </NFormItem>
+            <NFormItem :label="t('storage.activeProvider')">
+              <NSelect
+                :value="storageStore.uploadSettings.selectedProviderId"
+                :options="storageStore.enabledProviders.map(p => ({ label: p.name, value: p.id }))"
+                @update:value="storageStore.setActiveProvider($event)"
+                clearable
+                :placeholder="t('storage.selectProvider')"
+              />
+            </NFormItem>
+          </NForm>
+
+          <NAlert type="warning" style="margin-top: 12px">
+            {{ t('storage.corsWarning') }}
+          </NAlert>
+        </NCard>
+      </NTabPane>
     </NTabs>
 
     <!-- Add/Edit Preset Modal -->
@@ -361,6 +648,88 @@ function getTypeColor(type: string) {
           <NSpace>
             <NButton type="primary" @click="saveTemplate">{{ t('common.save') }}</NButton>
             <NButton @click="showTemplateModal = false">{{ t('common.cancel') }}</NButton>
+          </NSpace>
+        </NFormItem>
+      </NForm>
+    </NModal>
+
+    <!-- Add/Edit Storage Provider Modal -->
+    <NModal
+      v-model:show="showStorageModal"
+      preset="card"
+      style="max-width: 600px"
+      :title="editingStorage ? t('storage.editProvider') : t('storage.addProvider')"
+    >
+      <NForm label-placement="left" label-width="140">
+        <NFormItem :label="t('storage.providerName')" required>
+          <NInput v-model:value="storageForm.name" :placeholder="t('storage.placeholders.name')" />
+        </NFormItem>
+        <NFormItem :label="t('storage.providerType')">
+          <NSelect v-model:value="storageForm.type" :options="storageTypeOptions" />
+        </NFormItem>
+        <NFormItem :label="t('common.enabled')">
+          <NSwitch v-model:value="storageForm.enabled" />
+        </NFormItem>
+
+        <!-- WebDAV Configuration -->
+        <template v-if="storageForm.type === 'webdav'">
+          <NFormItem label="Endpoint" required>
+            <NInput v-model:value="storageForm.webdavEndpoint" placeholder="https://webdav.example.com" />
+          </NFormItem>
+          <NFormItem :label="t('storage.username')" required>
+            <NInput v-model:value="storageForm.webdavUsername" />
+          </NFormItem>
+          <NFormItem :label="t('storage.password')">
+            <NInput
+              v-model:value="storageForm.webdavPassword"
+              type="password"
+              show-password-on="click"
+            />
+          </NFormItem>
+          <NFormItem :label="t('storage.basePath')">
+            <NInput v-model:value="storageForm.webdavBasePath" placeholder="/uploads/ai-media" />
+          </NFormItem>
+        </template>
+
+        <!-- S3 Configuration -->
+        <template v-if="storageForm.type === 's3'">
+          <NFormItem label="Endpoint" required>
+            <NInput v-model:value="storageForm.s3Endpoint" placeholder="https://s3.amazonaws.com" />
+          </NFormItem>
+          <NFormItem label="Region">
+            <NInput v-model:value="storageForm.s3Region" placeholder="us-east-1" />
+          </NFormItem>
+          <NFormItem label="Bucket" required>
+            <NInput v-model:value="storageForm.s3Bucket" />
+          </NFormItem>
+          <NFormItem label="Access Key ID" required>
+            <NInput v-model:value="storageForm.s3AccessKeyId" />
+          </NFormItem>
+          <NFormItem label="Secret Access Key">
+            <NInput
+              v-model:value="storageForm.s3SecretAccessKey"
+              type="password"
+              show-password-on="click"
+            />
+          </NFormItem>
+          <NFormItem :label="t('storage.pathPrefix')">
+            <NInput v-model:value="storageForm.s3PathPrefix" placeholder="ai-media" />
+          </NFormItem>
+          <NFormItem :label="t('storage.forcePathStyle')">
+            <NSwitch v-model:value="storageForm.s3ForcePathStyle" />
+          </NFormItem>
+          <NFormItem :label="t('storage.publicUrl')">
+            <NInput v-model:value="storageForm.s3PublicUrl" placeholder="https://cdn.example.com" />
+          </NFormItem>
+        </template>
+
+        <NFormItem label=" ">
+          <NSpace>
+            <NButton type="primary" @click="saveStorage">{{ t('common.save') }}</NButton>
+            <NButton @click="handleTestConnection" :loading="testingConnection">
+              {{ t('storage.testConnection') }}
+            </NButton>
+            <NButton @click="showStorageModal = false">{{ t('common.cancel') }}</NButton>
           </NSpace>
         </NFormItem>
       </NForm>

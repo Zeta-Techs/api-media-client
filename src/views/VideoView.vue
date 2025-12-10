@@ -9,11 +9,14 @@ import {
 import { useConfigStore } from '@/stores/config'
 import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
-import { parseApiError } from '@/utils/api'
+import { BatchModeSwitch, BatchVideoPanel } from '@/components/batch'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
 const historyStore = useHistoryStore()
+
+// Batch mode toggle
+const isBatchMode = ref(false)
 
 // Form state
 const form = ref({
@@ -129,6 +132,19 @@ const actualSize = computed(() =>
   isCustomModel.value ? form.value.customSize : form.value.size
 )
 
+// Parse API error - 与参考实现保持一致
+function parseApiError(text: string, status: number): Error {
+  try {
+    const j = JSON.parse(text)
+    if (j && j.error && j.error.message) {
+      return new Error(`API ${status}: ${j.error.message} (${j.error.code || ''})`)
+    }
+  } catch {
+    // ignore parse error
+  }
+  return new Error(`API ${status}: ${text || 'unknown error'}`)
+}
+
 // Image resolution check
 async function checkImageResolution(file: File, expectedSize: string): Promise<{ match: boolean; actual?: string }> {
   return new Promise((resolve) => {
@@ -168,9 +184,10 @@ async function handleImageChange(options: { file: UploadFileInfo }) {
   }
 }
 
-// API functions
+// API functions - 与参考实现保持一致
 async function createVideo(fd: FormData, signal: AbortSignal) {
-  const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/videos'
+  const baseURL = configStore.baseUrl.replace(/\/$/, '')
+  const url = baseURL + '/v1/videos'
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${configStore.apiKey}` },
@@ -179,22 +196,32 @@ async function createVideo(fd: FormData, signal: AbortSignal) {
   })
   const text = await res.text()
   if (!res.ok) throw parseApiError(text, res.status)
-  return JSON.parse(text)
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('Invalid JSON from create')
+  }
 }
 
 async function getTaskStatus(id: string, signal?: AbortSignal) {
-  const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/videos/' + encodeURIComponent(id)
+  const baseURL = configStore.baseUrl.replace(/\/$/, '')
+  const url = baseURL + '/v1/videos/' + encodeURIComponent(id)
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${configStore.apiKey}` },
     signal
   })
   const text = await res.text()
   if (!res.ok) throw parseApiError(text, res.status)
-  return JSON.parse(text)
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('Invalid JSON from status')
+  }
 }
 
 async function getVideoContent(id: string, signal?: AbortSignal) {
-  const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/videos/' + encodeURIComponent(id) + '/content'
+  const baseURL = configStore.baseUrl.replace(/\/$/, '')
+  const url = baseURL + '/v1/videos/' + encodeURIComponent(id) + '/content'
   let res = await fetch(url, { signal })
   if (!res.ok && res.status === 401) {
     res = await fetch(url, {
@@ -209,7 +236,12 @@ async function getVideoContent(id: string, signal?: AbortSignal) {
   return await res.blob()
 }
 
-// Submit video generation
+// Sleep utility
+function sleep(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms))
+}
+
+// Submit video generation - 与参考实现保持一致
 async function handleSubmit() {
   if (!configStore.apiKey) {
     message.error(t('errors.missingApiKey'))
@@ -224,9 +256,25 @@ async function handleSubmit() {
     return
   }
 
-  if (referenceImage.value && imageWarning.value) {
-    message.error(imageWarning.value)
-    return
+  // 自定义模型时验证分辨率格式
+  if (isCustomModel.value && form.value.customSize) {
+    if (!/^\d+x\d+$/.test(form.value.customSize)) {
+      message.error(t('video.errors.invalidSizeFormat'))
+      return
+    }
+  }
+
+  // 强制验证参考图分辨率
+  if (referenceImage.value) {
+    const size = actualSize.value
+    if (size) {
+      const result = await checkImageResolution(referenceImage.value, size)
+      if (!result.match && result.actual) {
+        message.error(t('video.imageSizeMismatch', { actual: result.actual, expected: size }))
+        imageWarning.value = t('video.imageSizeMismatch', { actual: result.actual, expected: size })
+        return
+      }
+    }
   }
 
   errorMessage.value = ''
@@ -239,10 +287,11 @@ async function handleSubmit() {
   abortController.value = ctrl
 
   try {
+    // 构建 FormData - 与参考实现保持一致
     const fd = new FormData()
     fd.set('prompt', form.value.prompt)
     fd.set('model', actualModel.value)
-    fd.set('seconds', actualSeconds.value)
+    fd.set('seconds', String(actualSeconds.value))
     fd.set('size', actualSize.value)
     if (referenceImage.value) {
       fd.set('input_reference', referenceImage.value, referenceImage.value.name)
@@ -256,23 +305,22 @@ async function handleSubmit() {
     queryTaskId.value = id
     taskStatus.value = 'processing'
 
-    // 轮询配置：最多等待 15 分钟（300 次 * 3 秒）
-    const MAX_POLL_COUNT = 300
-    const POLL_INTERVAL = 3000
-    let pollCount = 0
-
-    while (pollCount < MAX_POLL_COUNT) {
-      pollCount++
+    // 轮询 - 与参考实现保持一致（无限轮询直到完成）
+    let pctShown = 0
+    while (true) {
       const st = await getTaskStatus(id, ctrl.signal)
       const status = (st.status || '').toLowerCase()
-      const pct = typeof st.progress === 'number' ? st.progress : 0
+      const pct = typeof st.progress === 'number' ? st.progress : undefined
 
+      if (typeof pct === 'number') pctShown = pct
       taskStatus.value = status
-      taskProgress.value = pct
+      taskProgress.value = pctShown
 
       if (status === 'completed') {
+        taskStatus.value = 'downloading'
         const blob = await getVideoContent(id, ctrl.signal)
         videoUrl.value = URL.createObjectURL(blob)
+        taskStatus.value = 'completed'
         historyStore.addItem({
           type: 'video',
           status: 'completed',
@@ -287,19 +335,21 @@ async function handleSubmit() {
         throw new Error(st?.error?.message || `Task ${status}`)
       }
 
-      // 检查是否超时
-      if (pollCount >= MAX_POLL_COUNT) {
-        throw new Error(t('video.errors.timeout'))
-      }
-
-      await new Promise(r => setTimeout(r, POLL_INTERVAL))
+      await sleep(3000)
     }
   } catch (e: any) {
     if (e.name === 'AbortError') {
       taskStatus.value = 'cancelled'
+      message.warning(t('common.cancelled'))
     } else {
       errorMessage.value = e.message
       taskStatus.value = 'failed'
+      historyStore.addItem({
+        type: 'video',
+        status: 'failed',
+        params: { ...form.value, referenceImage: null },
+        error: e.message
+      })
     }
   } finally {
     isLoading.value = false
@@ -385,11 +435,20 @@ onUnmounted(() => {
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title gradient-text">{{ t('video.title') }}</h1>
-      <p class="page-subtitle">{{ t('video.subtitle') }}</p>
+      <div class="header-row">
+        <div>
+          <h1 class="page-title gradient-text">{{ t('video.title') }}</h1>
+          <p class="page-subtitle">{{ t('video.subtitle') }}</p>
+        </div>
+        <BatchModeSwitch v-model="isBatchMode" />
+      </div>
     </div>
 
-    <div class="video-layout">
+    <!-- Batch Mode -->
+    <BatchVideoPanel v-if="isBatchMode" />
+
+    <!-- Single Mode -->
+    <div v-else class="video-layout">
       <!-- Form Section -->
       <NCard class="glass-card form-card">
         <NForm label-placement="left" label-width="100">
@@ -554,6 +613,13 @@ onUnmounted(() => {
   font-size: 14px;
   opacity: 0.7;
   margin: 0;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .video-layout {

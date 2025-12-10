@@ -13,10 +13,14 @@ import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
 import { parseApiError } from '@/utils/api'
 import type { AudioTranscriptionResponse, AudioFormData } from '@/types'
+import { BatchModeSwitch, BatchAudioPanel } from '@/components/batch'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
 const historyStore = useHistoryStore()
+
+// Batch mode toggle
+const isBatchMode = ref(false)
 
 // Local storage key for audio settings
 const AUDIO_SETTINGS_KEY = 'audio-form-settings'
@@ -801,11 +805,20 @@ onUnmounted(() => {
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title gradient-text">{{ t('audio.title') }}</h1>
-      <p class="page-subtitle">{{ t('audio.subtitle') }}</p>
+      <div class="header-row">
+        <div>
+          <h1 class="page-title gradient-text">{{ t('audio.title') }}</h1>
+          <p class="page-subtitle">{{ t('audio.subtitle') }}</p>
+        </div>
+        <BatchModeSwitch v-model="isBatchMode" />
+      </div>
     </div>
 
-    <div class="audio-layout">
+    <!-- Batch Mode -->
+    <BatchAudioPanel v-if="isBatchMode" />
+
+    <!-- Single Mode -->
+    <div v-else class="audio-layout">
       <!-- Left: Form Section -->
       <div ref="formSectionRef" class="form-section">
         <NCard class="glass-card">
@@ -1240,6 +1253,13 @@ onUnmounted(() => {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .page-title {

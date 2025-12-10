@@ -16,6 +16,7 @@
     "custom": "Custom",
     "submit": "Submit",
     "cancel": "Cancel",
+    "cancelled": "Cancelled",
     "download": "Download",
     "status": "Status",
     "progress": "Progress",
@@ -32,6 +33,9 @@
     "delete": "Delete",
     "save": "Save",
     "add": "Add",
+    "yes": "Yes",
+    "no": "No",
+    "enabled": "Enabled",
     "placeholder": {
       "apiKey": "Enter API Key",
       "customUrl": "https://your-api.com",
@@ -52,7 +56,11 @@
     "videoReady": "Video Ready",
     "generating": "Generating video...",
     "polling": "Polling task status...",
-    "imageSizeMismatch": "Reference image resolution ({actual}) doesn't match video resolution ({expected})!"
+    "imageSizeMismatch": "Reference image resolution ({actual}) doesn't match video resolution ({expected})!",
+    "errors": {
+      "invalidSizeFormat": "Invalid resolution format, please use WxH format, e.g. 1920x1080",
+      "timeout": "Task timeout"
+    }
   },
   "image": {
     "title": "Image Generation",
@@ -87,6 +95,11 @@
       "phone": "Phone",
       "ultraWide": "Ultra Wide",
       "ultraTall": "Ultra Tall"
+    },
+    "models": {
+      "gptImage1Desc": "Latest image model with transparency and quality options",
+      "dalle3Desc": "DALL·E 3, highest quality with prompt enhancement",
+      "dalle2Desc": "DALL·E 2, classic model with edit support"
     }
   },
   "history": {
@@ -113,7 +126,8 @@
     "tabs": {
       "providers": "Provider Presets",
       "templates": "Prompt Templates",
-      "backup": "Backup & Restore"
+      "backup": "Backup & Restore",
+      "storage": "Cloud Storage"
     },
     "providerPresets": "Provider Presets",
     "addPreset": "Add Preset",
@@ -180,6 +194,7 @@
     "responseFormat": "Output Format",
     "timestampGranularities": "Timestamp Granularities",
     "temperature": "Temperature",
+    "temperatureHint": "Higher temperature makes output more random",
     "prompt": "Prompt (Optional)",
     "promptPlaceholder": "Optional prompt to guide the model's style or continue a previous audio segment...",
     "transcribe": "Transcribe",
@@ -249,7 +264,9 @@
     },
     "errors": {
       "missingInput": "Please enter text to convert"
-    }
+    },
+    "result": "Results",
+    "speedHint": "Adjust speech playback speed (0.25x - 4x)"
   },
   "dalle": {
     "title": "DALL·E Image Generation",
@@ -459,9 +476,81 @@
     "loading": "Loading...",
     "submit": "Submit"
   },
-  "video": {
-    "errors": {
-      "timeout": "Task timed out, please query status with Task ID later"
+  "storage": {
+    "providers": "Cloud Storage",
+    "addProvider": "Add Storage",
+    "editProvider": "Edit Storage",
+    "noProviders": "No storage providers",
+    "providerName": "Name",
+    "providerType": "Type",
+    "username": "Username",
+    "password": "Password",
+    "basePath": "Base Path",
+    "pathPrefix": "Path Prefix",
+    "forcePathStyle": "Force Path Style",
+    "publicUrl": "Public URL",
+    "testConnection": "Test Connection",
+    "connectionSuccess": "Connection successful",
+    "connectionFailed": "Connection failed",
+    "providerAdded": "Storage provider added",
+    "providerUpdated": "Storage provider updated",
+    "active": "Active",
+    "setActive": "Set Active",
+    "uploadSettings": "Upload Settings",
+    "autoUpload": "Auto Upload",
+    "filenamePattern": "Filename Pattern",
+    "activeProvider": "Active Provider",
+    "selectProvider": "Select Provider",
+    "description": "Configure cloud storage to automatically upload batch task results.",
+    "corsWarning": "Note: Due to browser CORS restrictions, some storage services may require CORS configuration.",
+    "placeholders": {
+      "name": "e.g., My WebDAV"
     }
+  },
+  "batch": {
+    "singleMode": "Single",
+    "batchMode": "Batch",
+    "switchToSingle": "Switch to single mode",
+    "switchToBatch": "Switch to batch mode",
+    "noTasks": "No tasks",
+    "retry": "Retry",
+    "running": "Running",
+    "paused": "Paused",
+    "finished": "Finished",
+    "idle": "Idle",
+    "failedCount": "failed",
+    "processingCount": "Processing {count} tasks",
+    "inputPlaceholder": "Enter one prompt per line...",
+    "lineCount": "{count} lines",
+    "importSettings": "Import Settings",
+    "skipEmpty": "Skip empty lines",
+    "maxRows": "Max rows",
+    "clear": "Clear",
+    "addToQueue": "Add to Queue",
+    "dropFiles": "Drop files here or click to select",
+    "supportedFormats": "Supported formats",
+    "or": "or",
+    "start": "Start",
+    "startHint": "Start processing tasks in queue",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "confirmStop": "Are you sure you want to stop all tasks? Processing tasks will be cancelled.",
+    "retryFailed": "Retry Failed",
+    "retryFailedHint": "Reprocess all failed tasks",
+    "clearCompleted": "Clear Completed",
+    "clearFailed": "Clear Failed",
+    "clearAll": "Clear All",
+    "export": "Export",
+    "concurrency": "Concurrency",
+    "concurrencyHint": "Number of tasks to process simultaneously",
+    "queueConfig": "Queue Config",
+    "imagePrompts": "Image prompt list",
+    "ttsTexts": "Text-to-speech list",
+    "ttsInputPlaceholder": "Enter one text per line to convert to speech...",
+    "audioFiles": "Audio file list",
+    "audioInputPlaceholder": "Drop audio files here or click to select...",
+    "videoPrompts": "Video prompt list",
+    "videoInputPlaceholder": "Enter one video prompt per line..."
   }
 }

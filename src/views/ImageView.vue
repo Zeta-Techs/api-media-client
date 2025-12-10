@@ -12,10 +12,14 @@ import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
 import { parseApiError } from '@/utils/api'
 import type { GPTImageFormData, FluxFormData, GeminiAIStudioFormData, GeminiVertexFormData } from '@/types'
+import { BatchModeSwitch, BatchImagePanel } from '@/components/batch'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
 const historyStore = useHistoryStore()
+
+// Batch mode toggle
+const isBatchMode = ref(false)
 
 // Main tab: Nano Banana (Gemini), GPT-Image, Flux
 const mainTab = ref<'nano-banana' | 'gpt-image' | 'flux'>('nano-banana')
@@ -1012,11 +1016,20 @@ onUnmounted(() => {
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title gradient-text">{{ t('image.title') }}</h1>
-      <p class="page-subtitle">{{ t('image.subtitle') }}</p>
+      <div class="header-row">
+        <div>
+          <h1 class="page-title gradient-text">{{ t('image.title') }}</h1>
+          <p class="page-subtitle">{{ t('image.subtitle') }}</p>
+        </div>
+        <BatchModeSwitch v-model="isBatchMode" />
+      </div>
     </div>
 
-    <div class="image-layout">
+    <!-- Batch Mode -->
+    <BatchImagePanel v-if="isBatchMode" />
+
+    <!-- Single Mode -->
+    <div v-else class="image-layout">
         <!-- Form Section -->
         <NCard class="glass-card form-card">
           <!-- Main Tabs: Nano Banana, GPT-Image, Flux -->
@@ -1657,6 +1670,13 @@ onUnmounted(() => {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .page-title {

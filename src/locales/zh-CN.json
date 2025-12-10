@@ -16,6 +16,7 @@
     "custom": "自定义",
     "submit": "提交",
     "cancel": "取消",
+    "cancelled": "已取消",
     "download": "下载",
     "status": "状态",
     "progress": "进度",
@@ -32,6 +33,9 @@
     "delete": "删除",
     "save": "保存",
     "add": "添加",
+    "yes": "是",
+    "no": "否",
+    "enabled": "已启用",
     "placeholder": {
       "apiKey": "请输入 API Key",
       "customUrl": "https://your-api.com",
@@ -52,7 +56,11 @@
     "videoReady": "视频已就绪",
     "generating": "视频生成中...",
     "polling": "正在轮询任务状态...",
-    "imageSizeMismatch": "参考图分辨率 ({actual}) 与视频分辨率 ({expected}) 不一致！"
+    "imageSizeMismatch": "参考图分辨率 ({actual}) 与视频分辨率 ({expected}) 不一致！",
+    "errors": {
+      "invalidSizeFormat": "分辨率格式错误，请使用 宽x高 格式，如 1920x1080",
+      "timeout": "任务超时"
+    }
   },
   "image": {
     "title": "图片生成",
@@ -87,6 +95,11 @@
       "phone": "手机屏",
       "ultraWide": "超宽屏",
       "ultraTall": "超竖屏"
+    },
+    "models": {
+      "gptImage1Desc": "最新图像模型，支持透明背景和质量选项",
+      "dalle3Desc": "DALL·E 3，最高质量，自动优化提示词",
+      "dalle2Desc": "DALL·E 2，经典模型，支持编辑功能"
     }
   },
   "history": {
@@ -113,7 +126,8 @@
     "tabs": {
       "providers": "提供商预设",
       "templates": "提示词模板",
-      "backup": "备份与恢复"
+      "backup": "备份与恢复",
+      "storage": "云存储"
     },
     "providerPresets": "提供商预设",
     "addPreset": "添加预设",
@@ -180,6 +194,7 @@
     "responseFormat": "输出格式",
     "timestampGranularities": "时间戳粒度",
     "temperature": "Temperature",
+    "temperatureHint": "较高的温度会使输出更加随机",
     "prompt": "提示词 (可选)",
     "promptPlaceholder": "可选的提示词，用于指导模型的风格或继续之前的音频片段...",
     "transcribe": "开始转录",
@@ -249,7 +264,9 @@
     },
     "errors": {
       "missingInput": "请输入要转换的文字"
-    }
+    },
+    "result": "生成结果",
+    "speedHint": "调整语音播放速度 (0.25x - 4x)"
   },
   "dalle": {
     "title": "DALL·E 图片生成",
@@ -461,9 +478,81 @@
     "loading": "加载中...",
     "submit": "提交"
   },
-  "video": {
-    "errors": {
-      "timeout": "任务超时，请稍后通过任务 ID 查询状态"
+  "storage": {
+    "providers": "云存储服务",
+    "addProvider": "添加存储",
+    "editProvider": "编辑存储",
+    "noProviders": "暂无存储服务",
+    "providerName": "名称",
+    "providerType": "类型",
+    "username": "用户名",
+    "password": "密码",
+    "basePath": "基础路径",
+    "pathPrefix": "路径前缀",
+    "forcePathStyle": "强制路径风格",
+    "publicUrl": "公开访问URL",
+    "testConnection": "测试连接",
+    "connectionSuccess": "连接成功",
+    "connectionFailed": "连接失败",
+    "providerAdded": "存储服务已添加",
+    "providerUpdated": "存储服务已更新",
+    "active": "当前使用",
+    "setActive": "设为当前",
+    "uploadSettings": "上传设置",
+    "autoUpload": "自动上传",
+    "filenamePattern": "文件名模式",
+    "activeProvider": "当前存储服务",
+    "selectProvider": "选择存储服务",
+    "description": "配置云存储服务后，批量任务完成时可自动上传结果到云端存储。",
+    "corsWarning": "注意：由于浏览器 CORS 限制，部分存储服务可能需要配置跨域访问。",
+    "placeholders": {
+      "name": "例如：我的 WebDAV"
     }
+  },
+  "batch": {
+    "singleMode": "单个",
+    "batchMode": "批量",
+    "switchToSingle": "切换到单个模式",
+    "switchToBatch": "切换到批量模式",
+    "noTasks": "暂无任务",
+    "retry": "重试",
+    "running": "运行中",
+    "paused": "已暂停",
+    "finished": "已完成",
+    "idle": "空闲",
+    "failedCount": "失败",
+    "processingCount": "正在处理 {count} 个任务",
+    "inputPlaceholder": "每行输入一个提示词...",
+    "lineCount": "{count} 行",
+    "importSettings": "导入设置",
+    "skipEmpty": "跳过空行",
+    "maxRows": "最大行数",
+    "clear": "清空",
+    "addToQueue": "添加到队列",
+    "dropFiles": "拖放文件到此处，或点击选择",
+    "supportedFormats": "支持格式",
+    "or": "或",
+    "start": "开始",
+    "startHint": "开始处理队列中的任务",
+    "pause": "暂停",
+    "resume": "继续",
+    "stop": "停止",
+    "confirmStop": "确定要停止所有任务吗？正在处理的任务将被取消。",
+    "retryFailed": "重试失败",
+    "retryFailedHint": "重新处理所有失败的任务",
+    "clearCompleted": "清除已完成",
+    "clearFailed": "清除失败",
+    "clearAll": "清空全部",
+    "export": "导出",
+    "concurrency": "并发数",
+    "concurrencyHint": "同时处理的任务数量",
+    "queueConfig": "队列配置",
+    "imagePrompts": "图片提示词列表",
+    "ttsTexts": "文字转语音列表",
+    "ttsInputPlaceholder": "每行输入一段要转换的文字...",
+    "audioFiles": "音频文件列表",
+    "audioInputPlaceholder": "拖放音频文件或点击选择...",
+    "videoPrompts": "视频提示词列表",
+    "videoInputPlaceholder": "每行输入一个视频提示词..."
   }
 }
