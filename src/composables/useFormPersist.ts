@@ -2,7 +2,7 @@
  * useFormPersist composable
  * 提供表单状态的 localStorage 持久化功能
  */
-import { ref, watch, onMounted, type Ref } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, type Ref } from 'vue'
 
 export interface UseFormPersistOptions<T> {
   /** 要排除的字段（不持久化） */
@@ -88,6 +88,15 @@ export function useFormPersist<T extends object>(
   // 组件挂载时加载数据
   onMounted(() => {
     load()
+  })
+
+  // 组件卸载前确保保存
+  onBeforeUnmount(() => {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    save() // 立即保存，确保不丢失数据
   })
 
   return form

@@ -13,14 +13,7 @@ import {
 } from '@vicons/ionicons5'
 import { useTranslation, TRANSLATION_MODELS, TARGET_LANGUAGES } from '@/composables/useTranslation'
 import { useConfigStore } from '@/stores/config'
-
-interface SubtitleItem {
-  text: string
-  translated?: string
-  timestamp: Date
-  isFinal: boolean
-  isTranslating?: boolean
-}
+import type { SubtitleItem } from '@/types'
 
 interface Props {
   /** 是否显示 */

@@ -10,18 +10,14 @@ import { ExpandOutline } from '@vicons/ionicons5'
 import { useConfigStore } from '@/stores/config'
 import { message } from '@/composables/useNaiveMessage'
 import FullscreenSubtitle from '@/components/FullscreenSubtitle.vue'
-
-// 字幕项类型（与 FullscreenSubtitle 组件共享）
-interface SubtitleItem {
-  text: string
-  translated?: string
-  timestamp: Date
-  isFinal: boolean
-  isTranslating?: boolean
-}
+import type { SubtitleItem } from '@/types'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
+
+// 消息上限，防止 DOM 性能问题
+const MAX_TRANSCRIPTS = 500
+const MAX_CONVERSATION = 200
 
 // Mode: conversation (normal voice chat) or transcription (subtitle mode)
 const mode = ref<'conversation' | 'transcription'>('conversation')
@@ -300,6 +296,22 @@ function scrollToBottom(container: HTMLElement | null) {
   }
 }
 
+// 添加字幕（带上限）
+function addTranscript(item: SubtitleItem) {
+  transcripts.value.push(item)
+  if (transcripts.value.length > MAX_TRANSCRIPTS) {
+    transcripts.value.shift()
+  }
+}
+
+// 添加对话消息（带上限）
+function addConversationMessage(msg: { role: 'user' | 'assistant'; content: string; timestamp: Date }) {
+  conversation.value.push(msg)
+  if (conversation.value.length > MAX_CONVERSATION) {
+    conversation.value.shift()
+  }
+}
+
 // Handle server events
 function handleServerEvent(event: any) {
   switch (event.type) {
@@ -313,7 +325,7 @@ function handleServerEvent(event: any) {
         const transcript = event.item.content[0].transcript
 
         // Always add to transcripts for subtitle display
-        transcripts.value.push({
+        addTranscript({
           text: transcript,
           timestamp: new Date(),
           isFinal: true
@@ -322,7 +334,7 @@ function handleServerEvent(event: any) {
         scrollToBottom(transcriptContainerRef.value)
 
         if (mode.value === 'conversation') {
-          conversation.value.push({
+          addConversationMessage({
             role: 'user',
             content: transcript,
             timestamp: new Date()
@@ -343,7 +355,7 @@ function handleServerEvent(event: any) {
           lastTranscript.timestamp = new Date()
         } else {
           // 没有临时字幕，创建新的最终字幕
-          transcripts.value.push({
+          addTranscript({
             text: event.transcript,
             timestamp: new Date(),
             isFinal: true
@@ -367,7 +379,7 @@ function handleServerEvent(event: any) {
           lastTranscript.text = currentTranscript.value
         } else if (currentTranscript.value) {
           // 创建新的临时字幕
-          transcripts.value.push({
+          addTranscript({
             text: currentTranscript.value,
             timestamp: new Date(),
             isFinal: false
@@ -408,13 +420,13 @@ function handleServerEvent(event: any) {
     case 'response.done':
       if (mode.value === 'conversation') {
         if (currentResponseText.value) {
-          conversation.value.push({
+          addConversationMessage({
             role: 'assistant',
             content: currentResponseText.value,
             timestamp: new Date()
           })
           // Also add AI response to transcripts
-          transcripts.value.push({
+          addTranscript({
             text: `[AI] ${currentResponseText.value}`,
             timestamp: new Date(),
             isFinal: true

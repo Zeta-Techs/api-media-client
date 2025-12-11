@@ -503,6 +503,11 @@
     "selectProvider": "Select Provider",
     "description": "Configure cloud storage to automatically upload batch task results.",
     "corsWarning": "Note: Due to browser CORS restrictions, some storage services may require CORS configuration.",
+    "uploadTo": "Upload to",
+    "uploading": "Uploading...",
+    "uploadSuccess": "Upload successful",
+    "uploadFailed": "Upload failed",
+    "noProviderConfigured": "No cloud storage configured",
     "placeholders": {
       "name": "e.g., My WebDAV"
     }
@@ -513,6 +518,8 @@
     "switchToSingle": "Switch to single mode",
     "switchToBatch": "Switch to batch mode",
     "noTasks": "No tasks",
+    "moderationTextPlaceholder": "Enter one text per line to analyze...",
+    "moderationImagePlaceholder": "Enter one image URL per line...",
     "retry": "Retry",
     "running": "Running",
     "paused": "Paused",

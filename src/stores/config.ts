@@ -11,14 +11,14 @@ function generateId(): string {
 const defaultPresets: ProviderPreset[] = [
   {
     id: 'default-zeta',
-    name: 'Zeta API',
+    name: 'ZetaTechs API',
     baseUrl: 'https://api.zetatechs.com',
     apiKey: '',
     createdAt: Date.now()
   },
   {
     id: 'default-ent',
-    name: 'Zeta Enterprise',
+    name: 'ZetaTechs Enterprise',
     baseUrl: 'https://ent.zetatechs.com',
     apiKey: '',
     createdAt: Date.now()

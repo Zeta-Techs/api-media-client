@@ -10,9 +10,13 @@ import {
 import { useConfigStore } from '@/stores/config'
 import { message } from '@/composables/useNaiveMessage'
 import { parseApiError } from '@/utils/api'
+import { BatchModeSwitch, BatchModerationPanel } from '@/components/batch'
 
 const { t } = useI18n()
 const configStore = useConfigStore()
+
+// Batch mode state
+const isBatchMode = ref(false)
 
 // Local storage key
 const MODERATION_SETTINGS_KEY = 'moderation-form-settings'
@@ -270,11 +274,20 @@ function clearResult() {
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title gradient-text">{{ t('moderation.title') }}</h1>
-      <p class="page-subtitle">{{ t('moderation.subtitle') }}</p>
+      <div class="header-row">
+        <div>
+          <h1 class="page-title gradient-text">{{ t('moderation.title') }}</h1>
+          <p class="page-subtitle">{{ t('moderation.subtitle') }}</p>
+        </div>
+        <BatchModeSwitch v-model="isBatchMode" />
+      </div>
     </div>
 
-    <div class="moderation-layout">
+    <!-- Batch Mode -->
+    <BatchModerationPanel v-if="isBatchMode" />
+
+    <!-- Single Mode -->
+    <div v-else class="moderation-layout">
       <!-- Left: Form Section -->
       <div class="form-section">
         <NCard class="glass-card">
@@ -468,6 +481,20 @@ function clearResult() {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .page-title {

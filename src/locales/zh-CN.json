@@ -505,6 +505,11 @@
     "selectProvider": "选择存储服务",
     "description": "配置云存储服务后，批量任务完成时可自动上传结果到云端存储。",
     "corsWarning": "注意：由于浏览器 CORS 限制，部分存储服务可能需要配置跨域访问。",
+    "uploadTo": "上传到",
+    "uploading": "上传中...",
+    "uploadSuccess": "上传成功",
+    "uploadFailed": "上传失败",
+    "noProviderConfigured": "未配置云存储服务",
     "placeholders": {
       "name": "例如：我的 WebDAV"
     }
@@ -515,6 +520,8 @@
     "switchToSingle": "切换到单个模式",
     "switchToBatch": "切换到批量模式",
     "noTasks": "暂无任务",
+    "moderationTextPlaceholder": "每行输入一段要审核的文本...",
+    "moderationImagePlaceholder": "每行输入一个图片URL...",
     "retry": "重试",
     "running": "运行中",
     "paused": "已暂停",
