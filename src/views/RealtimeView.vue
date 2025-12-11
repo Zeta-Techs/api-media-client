@@ -992,7 +992,7 @@ onUnmounted(() => {
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
+  background: linear-gradient(135deg, #22d3ee, #a78bfa, #4ade80);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1184,7 +1184,7 @@ onUnmounted(() => {
 
 .message.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
   color: white;
 }
 
@@ -1194,7 +1194,7 @@ onUnmounted(() => {
 }
 
 .message.streaming {
-  border: 1px solid rgba(124, 58, 237, 0.3);
+  border: 1px solid rgba(14, 165, 233, 0.3);
 }
 
 .message-header {
@@ -1251,13 +1251,13 @@ onUnmounted(() => {
 }
 
 .transcript-item.ai {
-  background: rgba(124, 58, 237, 0.1);
-  border-left: 3px solid #7c3aed;
+  background: rgba(14, 165, 233, 0.1);
+  border-left: 3px solid #0ea5e9;
 }
 
 .transcript-item.partial {
-  background: rgba(124, 58, 237, 0.1);
-  border: 1px dashed rgba(124, 58, 237, 0.3);
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px dashed rgba(14, 165, 233, 0.3);
 }
 
 .transcript-time {
@@ -1274,7 +1274,7 @@ onUnmounted(() => {
 
 .typing-cursor {
   animation: blink 1s infinite;
-  color: #7c3aed;
+  color: #0ea5e9;
 }
 
 @keyframes blink {

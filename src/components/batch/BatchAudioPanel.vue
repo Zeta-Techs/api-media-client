@@ -476,7 +476,7 @@ onUnmounted(() => {
 .file-name {
   font-size: 13px;
   font-weight: 500;
-  color: #7c3aed;
+  color: #0ea5e9;
 }
 
 .transcription-text {

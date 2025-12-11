@@ -825,7 +825,7 @@ const currentSubtitle = computed(() => {
 }
 
 .typing-cursor {
-  color: #7c3aed;
+  color: #0ea5e9;
   animation: cursor-blink 1s infinite;
 }
 

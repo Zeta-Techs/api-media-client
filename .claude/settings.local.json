@@ -8,7 +8,10 @@
       "Bash(npx vue-tsc:*)",
       "Bash(npx openspec:*)",
       "Bash(lsof:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ls:*)",
+      "Bash(cat:*)"
     ]
   }
 }

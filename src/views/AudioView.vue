@@ -788,8 +788,8 @@ function formatTimestamp(seconds: number): string {
 }
 
 function getSpeakerColor(speaker: string | undefined): string {
-  if (!speaker) return '#7c3aed'
-  const colors = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+  if (!speaker) return '#0ea5e9'
+  const colors = ['#22d3ee', '#4ade80', '#a78bfa', '#fb923c', '#f87171', '#0ea5e9']
   const index = speaker.charCodeAt(speaker.length - 1) % colors.length
   return colors[index]
 }
@@ -1266,7 +1266,7 @@ onUnmounted(() => {
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
+  background: linear-gradient(135deg, #22d3ee, #a78bfa, #4ade80);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1439,7 +1439,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   border-radius: 8px;
   transition: all 0.2s ease;
-  background: rgba(124, 58, 237, 0.05);
+  background: rgba(14, 165, 233, 0.05);
 }
 
 .clickable {
@@ -1447,7 +1447,7 @@ onUnmounted(() => {
 }
 
 .segment-time.clickable:hover {
-  color: #06b6d4;
+  color: #22d3ee;
 }
 
 .segment-text.clickable:hover {
@@ -1456,8 +1456,8 @@ onUnmounted(() => {
 }
 
 .segment-item.active {
-  background: rgba(124, 58, 237, 0.25);
-  border-left: 3px solid #7c3aed;
+  background: rgba(14, 165, 233, 0.25);
+  border-left: 3px solid #0ea5e9;
 }
 
 .speaker-badge {
@@ -1473,7 +1473,7 @@ onUnmounted(() => {
 .segment-time {
   font-family: ui-monospace, monospace;
   font-size: 11px;
-  color: #7c3aed;
+  color: #0ea5e9;
   flex-shrink: 0;
   min-width: 50px;
 }
@@ -1500,7 +1500,7 @@ onUnmounted(() => {
 }
 
 .inline-word:hover {
-  background: rgba(124, 58, 237, 0.2);
+  background: rgba(14, 165, 233, 0.2);
 }
 
 .inline-word.past {
@@ -1508,13 +1508,13 @@ onUnmounted(() => {
 }
 
 .inline-word.active {
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
   color: white;
   padding: 2px 4px;
   border-radius: 4px;
   font-weight: 600;
   opacity: 1;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
 }
 
 /* Words section (standalone, when no segments) - handled by .result-card rules */
@@ -1532,7 +1532,7 @@ onUnmounted(() => {
 .word-item {
   display: inline-block;
   padding: 4px 8px;
-  background: rgba(124, 58, 237, 0.1);
+  background: rgba(14, 165, 233, 0.1);
   border-radius: 6px;
   font-size: 13px;
   transition: all 0.15s ease;
@@ -1540,7 +1540,7 @@ onUnmounted(() => {
 }
 
 .word-item:hover {
-  background: rgba(124, 58, 237, 0.25);
+  background: rgba(14, 165, 233, 0.25);
   transform: scale(1.05);
 }
 
@@ -1549,7 +1549,7 @@ onUnmounted(() => {
 }
 
 .word-item.active {
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
   color: white;
   transform: scale(1.1);
   font-weight: 600;
@@ -1614,7 +1614,7 @@ onUnmounted(() => {
 .formats-note.tip {
   margin-top: 8px;
   opacity: 0.8;
-  color: #7c3aed;
+  color: #0ea5e9;
 }
 
 .info-card {

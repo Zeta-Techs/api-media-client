@@ -119,7 +119,7 @@ const progressStatus = computed(() => {
 .progress-percentage {
   font-size: 14px;
   font-weight: 600;
-  color: #7c3aed;
+  color: #0ea5e9;
 }
 
 .processing-info {

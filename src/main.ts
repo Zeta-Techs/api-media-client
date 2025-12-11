@@ -6,8 +6,7 @@ import App from './App.vue'
 import router from './router'
 import zhCN from './locales/zh-CN.json'
 import enUS from './locales/en-US.json'
-import './assets/styles/glass.css'
-import './assets/styles/responsive.css'
+import './index.css'
 
 const i18n = createI18n({
   legacy: false,

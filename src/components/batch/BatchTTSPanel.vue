@@ -514,7 +514,7 @@ onUnmounted(() => {
   height: 28px;
   border-radius: 50%;
   border: none;
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
   color: white;
   cursor: pointer;
   display: flex;

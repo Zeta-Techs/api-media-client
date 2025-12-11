@@ -204,7 +204,7 @@ function formatInput(input: any): string {
 .task-index {
   font-size: 12px;
   font-weight: 600;
-  color: #7c3aed;
+  color: #0ea5e9;
   min-width: 28px;
 }
 

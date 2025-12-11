@@ -44,7 +44,7 @@ const { t } = useI18n()
 
 .mode-label.active {
   opacity: 1;
-  color: #7c3aed;
+  color: #0ea5e9;
   font-weight: 500;
 }
 </style>

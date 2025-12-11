@@ -76,23 +76,27 @@ const naiveDateLocale = computed(() => locale.value === 'zh-CN' ? dateZhCN : dat
 
 const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   common: {
-    primaryColor: isDark.value ? '#7c3aed' : '#6366f1',
-    primaryColorHover: isDark.value ? '#8b5cf6' : '#818cf8',
-    primaryColorPressed: isDark.value ? '#6d28d9' : '#4f46e5',
+    primaryColor: '#0ea5e9',
+    primaryColorHover: '#0284c7',
+    primaryColorPressed: '#0369a1',
     borderRadius: '12px',
     fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
   },
   Card: {
-    borderRadius: '16px'
+    borderRadius: '12px',
+    color: isDark.value ? '#111827' : '#ffffff',
+    borderColor: isDark.value ? '#1f2937' : '#e5e7eb'
   },
   Button: {
-    borderRadiusMedium: '10px'
+    borderRadiusMedium: '9999px'
   },
   Input: {
-    borderRadius: '10px'
+    borderRadius: '8px',
+    color: isDark.value ? '#111827' : '#ffffff',
+    borderColor: isDark.value ? '#374151' : '#d1d5db'
   },
   Select: {
-    borderRadius: '10px'
+    borderRadius: '8px'
   }
 }))
 
@@ -370,11 +374,11 @@ watch(isDark, (dark) => {
 }
 
 .dark .app-background {
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0f0f2a 100%);
+  background: linear-gradient(to bottom, #111827, #020617, #000000);
 }
 
 .light .app-background {
-  background: linear-gradient(135deg, #e0e5ec 0%, #f8fafc 50%, #e8ecf4 100%);
+  background: linear-gradient(to bottom, #f9fafb, #f3f4f6, #e5e7eb);
 }
 
 .app-layout {
@@ -396,13 +400,13 @@ watch(isDark, (dark) => {
 }
 
 .dark .glass-nav {
-  background: rgba(20, 20, 40, 0.8) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(17, 24, 39, 0.95) !important;
+  border-bottom: 1px solid #1f2937 !important;
 }
 
 .light .glass-nav {
-  background: rgba(255, 255, 255, 0.8) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1px solid #e5e7eb !important;
 }
 
 .header-content {
@@ -425,7 +429,7 @@ watch(isDark, (dark) => {
 
 .logo-icon {
   font-size: 24px;
-  background: linear-gradient(135deg, #7c3aed, #06b6d4);
+  background: linear-gradient(135deg, #22d3ee, #4ade80);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

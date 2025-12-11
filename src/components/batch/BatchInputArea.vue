@@ -238,13 +238,13 @@ function clearInput() {
 }
 
 .upload-area:hover {
-  border-color: rgba(124, 58, 237, 0.6);
-  background: rgba(124, 58, 237, 0.05);
+  border-color: rgba(14, 165, 233, 0.6);
+  background: rgba(14, 165, 233, 0.05);
 }
 
 .upload-icon {
   font-size: 32px;
-  color: #7c3aed;
+  color: #0ea5e9;
   opacity: 0.6;
   margin-bottom: 8px;
 }
