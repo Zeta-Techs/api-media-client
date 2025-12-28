@@ -66,6 +66,12 @@ interface BaseImageFormData {
 export interface GeminiAIStudioFormData extends BaseImageFormData {
   format: 'gemini-ai-studio'
   imageSize: string
+  aspectRatio: string
+  googleSearch: boolean
+  temperature: number
+  topP: number
+  maxOutputTokens: number
+  stopSequences: string[]
   referenceImages: File[]
 }
 

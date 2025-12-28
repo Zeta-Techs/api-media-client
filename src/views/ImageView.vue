@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import {
   NCard, NForm, NFormItem, NInput, NSelect, NButton, NSpace,
   NInputNumber, NUpload, NAlert, NSpin, NTabs, NTabPane,
-  NRadioGroup, NRadio, NSlider, NModal, NTag, NTooltip,
+  NRadioGroup, NRadio, NSlider, NModal, NTag, NTooltip, NSwitch,
   type UploadFileInfo
 } from 'naive-ui'
 import { useConfigStore } from '@/stores/config'
@@ -15,8 +16,14 @@ import type { GPTImageFormData, FluxFormData, GeminiAIStudioFormData, GeminiVert
 import { BatchModeSwitch, BatchImagePanel } from '@/components/batch'
 
 const { t } = useI18n()
+const router = useRouter()
 const configStore = useConfigStore()
 const historyStore = useHistoryStore()
+
+// Navigate to settings page
+function goToSettings() {
+  router.push('/settings')
+}
 
 // Batch mode toggle
 const isBatchMode = ref(false)
@@ -56,7 +63,13 @@ const formAI = ref({
   prompt: '',
   model: 'gemini-3-pro-image-preview-flatfee',
   customModel: '',
-  imageSize: '1K'
+  imageSize: '1K',
+  aspectRatio: 'auto',
+  googleSearch: true,
+  temperature: 1,
+  topP: 0.95,
+  maxOutputTokens: 32768,
+  stopSequences: ''
 })
 
 // Form state - Vertex
@@ -807,14 +820,32 @@ async function handleSubmitAI() {
 
     const contents = [{ role: 'user', parts }]
 
-    const generationConfig = {
+    const generationConfig: any = {
       responseModalities: ['IMAGE', 'TEXT'],
+      temperature: formAI.value.temperature,
+      topP: formAI.value.topP,
+      maxOutputTokens: formAI.value.maxOutputTokens,
       imageConfig: {
         image_size: formAI.value.imageSize
       }
     }
 
-    const tools = model.includes('2.5-flash') ? null : [{ googleSearch: {} }]
+    // Add aspect ratio if not auto
+    if (formAI.value.aspectRatio !== 'auto') {
+      generationConfig.imageConfig.aspectRatio = formAI.value.aspectRatio
+    }
+
+    // Add stop sequences if provided
+    const stopSeqArray = formAI.value.stopSequences
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+    if (stopSeqArray.length > 0) {
+      generationConfig.stopSequences = stopSeqArray
+    }
+
+    // Google Search tool based on user toggle
+    const tools = formAI.value.googleSearch ? [{ googleSearch: {} }] : null
 
     const response = await generateGeminiImage(model, contents, generationConfig, null, tools, ctrl.signal)
     const imageData = extractImageFromResponse(response)
@@ -838,6 +869,12 @@ async function handleSubmitAI() {
       customModel: formAI.value.customModel,
       format: 'gemini-ai-studio',
       imageSize: formAI.value.imageSize,
+      aspectRatio: formAI.value.aspectRatio,
+      googleSearch: formAI.value.googleSearch,
+      temperature: formAI.value.temperature,
+      topP: formAI.value.topP,
+      maxOutputTokens: formAI.value.maxOutputTokens,
+      stopSequences: stopSeqArray,
       referenceImages: []
     }
     historyStore.addItem({
@@ -1040,7 +1077,7 @@ onUnmounted(() => {
               <NTabs v-model:value="geminiSubTab" type="line" animated class="gemini-sub-tabs">
                 <!-- AI Studio Format -->
                 <NTabPane name="ai-studio" :tab="t('image.format.aiStudio')">
-                  <NForm label-placement="left" label-width="120" class="form-content">
+                  <NForm label-placement="left" label-width="140" class="form-content">
                     <!-- Provider Preset -->
                     <NFormItem :label="t('settings.providerPresets')">
                       <NSpace align="center" style="width: 100%">
@@ -1058,6 +1095,9 @@ onUnmounted(() => {
                           </template>
                           {{ configStore.apiKey ? configStore.baseUrl : t('errors.missingApiKey') }}
                         </NTooltip>
+                        <NButton text size="small" @click="goToSettings">
+                          {{ t('image.editPreset') }}
+                        </NButton>
                       </NSpace>
                     </NFormItem>
 
@@ -1112,6 +1152,51 @@ onUnmounted(() => {
                       </NRadioGroup>
                     </NFormItem>
 
+                    <!-- Aspect Ratio -->
+                    <NFormItem :label="t('image.aspectRatio')">
+                      <NSelect v-model:value="formAI.aspectRatio" :options="aspectRatioOptions" />
+                    </NFormItem>
+
+                    <!-- Google Search -->
+                    <NFormItem :label="t('image.googleSearch')">
+                      <NSpace align="center">
+                        <NSwitch v-model:value="formAI.googleSearch" />
+                        <span class="form-hint">{{ t('image.googleSearchHint') }}</span>
+                      </NSpace>
+                    </NFormItem>
+
+                    <!-- Temperature -->
+                    <NFormItem :label="t('image.temperature')">
+                      <div class="slider-container">
+                        <NSlider v-model:value="formAI.temperature" :min="0" :max="1" :step="0.05" />
+                        <NInputNumber v-model:value="formAI.temperature" :min="0" :max="1" :step="0.05" style="width: 80px" />
+                      </div>
+                    </NFormItem>
+
+                    <!-- Top P -->
+                    <NFormItem :label="t('image.topP')">
+                      <div class="slider-container">
+                        <NSlider v-model:value="formAI.topP" :min="0" :max="1" :step="0.05" />
+                        <NInputNumber v-model:value="formAI.topP" :min="0" :max="1" :step="0.05" style="width: 80px" />
+                      </div>
+                    </NFormItem>
+
+                    <!-- Max Tokens -->
+                    <NFormItem :label="t('image.maxTokens')">
+                      <div class="slider-container">
+                        <NSlider v-model:value="formAI.maxOutputTokens" :min="1" :max="32768" :step="1024" />
+                        <NInputNumber v-model:value="formAI.maxOutputTokens" :min="1" :max="32768" :step="1" style="width: 100px" />
+                      </div>
+                    </NFormItem>
+
+                    <!-- Stop Sequences -->
+                    <NFormItem :label="t('image.stopSequences')">
+                      <NInput
+                        v-model:value="formAI.stopSequences"
+                        :placeholder="t('image.stopSequencesPlaceholder')"
+                      />
+                    </NFormItem>
+
                     <!-- Submit -->
                     <NFormItem label=" ">
                       <NSpace>
@@ -1146,6 +1231,9 @@ onUnmounted(() => {
                           </template>
                           {{ configStore.apiKey ? configStore.baseUrl : t('errors.missingApiKey') }}
                         </NTooltip>
+                        <NButton text size="small" @click="goToSettings">
+                          {{ t('image.editPreset') }}
+                        </NButton>
                       </NSpace>
                     </NFormItem>
 
@@ -1286,6 +1374,9 @@ onUnmounted(() => {
                       </template>
                       {{ configStore.apiKey ? configStore.baseUrl : t('errors.missingApiKey') }}
                     </NTooltip>
+                    <NButton text size="small" @click="goToSettings">
+                      {{ t('image.editPreset') }}
+                    </NButton>
                   </NSpace>
                 </NFormItem>
 
@@ -1445,6 +1536,9 @@ onUnmounted(() => {
                       </template>
                       {{ configStore.apiKey ? configStore.baseUrl : t('errors.missingApiKey') }}
                     </NTooltip>
+                    <NButton text size="small" @click="goToSettings">
+                      {{ t('image.editPreset') }}
+                    </NButton>
                   </NSpace>
                 </NFormItem>
 
@@ -1768,6 +1862,11 @@ onUnmounted(() => {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.6);
   margin-top: 4px;
+}
+
+.form-hint {
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 /* GPT-Image multi-image grid */

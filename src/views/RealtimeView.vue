@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import {
   NCard, NForm, NFormItem, NInput, NSelect, NButton, NSpace,
   NAlert, NTag, NTooltip, NSlider, NSwitch,
@@ -13,7 +14,13 @@ import FullscreenSubtitle from '@/components/FullscreenSubtitle.vue'
 import type { SubtitleItem } from '@/types'
 
 const { t } = useI18n()
+const router = useRouter()
 const configStore = useConfigStore()
+
+// Navigate to settings page
+function goToSettings() {
+  router.push('/settings')
+}
 
 // 消息上限，防止 DOM 性能问题
 const MAX_TRANSCRIPTS = 500
@@ -759,6 +766,9 @@ onUnmounted(() => {
                   </template>
                   {{ configStore.apiKey ? configStore.baseUrl : t('errors.missingApiKey') }}
                 </NTooltip>
+                <NButton text size="small" @click="goToSettings" :disabled="isConnected">
+                  {{ t('image.editPreset') }}
+                </NButton>
               </NSpace>
             </NFormItem>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import {
   NCard, NForm, NFormItem, NInput, NSelect, NButton, NSpace,
   NUpload, NAlert, NSpin, NTag, NTooltip, NTabs, NTabPane,
@@ -13,7 +14,13 @@ import { parseApiError } from '@/utils/api'
 import { BatchModeSwitch, BatchModerationPanel } from '@/components/batch'
 
 const { t } = useI18n()
+const router = useRouter()
 const configStore = useConfigStore()
+
+// Navigate to settings page
+function goToSettings() {
+  router.push('/settings')
+}
 
 // Batch mode state
 const isBatchMode = ref(false)
@@ -309,6 +316,9 @@ function clearResult() {
                   </template>
                   {{ configStore.apiKey ? configStore.baseUrl : t('errors.missingApiKey') }}
                 </NTooltip>
+                <NButton text size="small" @click="goToSettings">
+                  {{ t('image.editPreset') }}
+                </NButton>
               </NSpace>
             </NFormItem>
 
