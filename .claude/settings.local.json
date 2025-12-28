@@ -12,7 +12,11 @@
       "Bash(npm install:*)",
       "Bash(npm ls:*)",
       "Bash(cat:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(openspec list:*)",
+      "Bash(openspec show:*)",
+      "Bash(openspec validate:*)",
+      "Bash(openspec archive:*)"
     ]
   }
 }
