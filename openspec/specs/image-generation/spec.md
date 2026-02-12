@@ -1,9 +1,9 @@
 # Image Generation
 
+## Purpose
+
 AI-powered image generation capability supporting multiple model providers and formats.
-
 ## Requirements
-
 ### Requirement: Multi-Provider Image Generation
 
 The system SHALL support image generation through multiple AI model providers with distinct API formats.
@@ -33,8 +33,9 @@ The system SHALL support image generation through multiple AI model providers wi
 The system SHALL provide model selection for each image generation provider.
 
 #### Scenario: Gemini model selection
-- **WHEN** user accesses Gemini image generation
-- **THEN** system offers models: gemini-3-pro-image-preview-flatfee, gemini-3-pro-image-preview, gemini-2.5-flash-image
+- **WHEN** user accesses Gemini image generation in AI Studio or Vertex format
+- **THEN** system offers models: gemini-3-pro-image-preview, gemini-2.5-flash-image
+- **AND** does not include gemini-3-pro-image-preview-flatfee in preset options
 - **AND** allows custom model name input
 
 #### Scenario: GPT-Image model selection
@@ -171,3 +172,4 @@ The system SHALL record completed generations to history.
 - **WHEN** image generation completes successfully
 - **THEN** system adds entry to history store with type 'image'
 - **AND** includes all form parameters and thumbnail reference
+

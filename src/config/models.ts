@@ -61,9 +61,8 @@ export const GPT_IMAGE_QUALITIES: ModelOption[] = [
  * Gemini Image 模型
  */
 export const GEMINI_IMAGE_MODELS: ModelOption[] = [
-  { label: 'gemini-3-pro-image-preview-flatfee', value: 'gemini-3-pro-image-preview-flatfee' },
-  { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' },
-  { label: 'gemini-2.0-flash-exp-image-generation', value: 'gemini-2.0-flash-exp-image-generation' }
+  { label: 'gemini-3-pro-image-preview', value: 'gemini-3-pro-image-preview' },
+  { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' }
 ]
 
 /**

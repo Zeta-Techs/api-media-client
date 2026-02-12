@@ -61,7 +61,7 @@ const gptRevisedPrompt = ref('')
 // Form state - AI Studio
 const formAI = ref({
   prompt: '',
-  model: 'gemini-3-pro-image-preview-flatfee',
+  model: 'gemini-3-pro-image-preview',
   customModel: '',
   imageSize: '1K',
   aspectRatio: 'auto',
@@ -75,7 +75,7 @@ const formAI = ref({
 // Form state - Vertex
 const formVertex = ref({
   prompt: '',
-  model: 'gemini-3-pro-image-preview-flatfee',
+  model: 'gemini-3-pro-image-preview',
   customModel: '',
   imageSize: '1K',
   aspectRatio: 'auto',
@@ -299,7 +299,6 @@ function loadGPTSettings() {
 
 // ==================== Gemini-Image Options ====================
 const geminiModelOptions = [
-  { label: 'gemini-3-pro-image-preview-flatfee (Pro 按次计费)', value: 'gemini-3-pro-image-preview-flatfee' },
   { label: 'gemini-3-pro-image-preview (Pro)', value: 'gemini-3-pro-image-preview' },
   { label: 'gemini-2.5-flash-image (Flash)', value: 'gemini-2.5-flash-image' },
   { label: t('common.custom'), value: 'custom' }
