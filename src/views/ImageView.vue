@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import {
@@ -58,11 +58,26 @@ interface GPTCustomSizeDimensions {
   height: number
 }
 
+interface GPTMaskCanvasDimensions {
+  width: number
+  height: number
+}
+
+interface GPTMaskPoint {
+  x: number
+  y: number
+}
+
+type GPTMaskTool = 'brush' | 'eraser' | 'pan'
+
 const GPT_IMAGE_2_MIN_PIXELS = 655360
 const GPT_IMAGE_2_MAX_PIXELS = 8294400
 const GPT_IMAGE_2_MAX_EDGE = 3840
 const GPT_IMAGE_2_STEP = 16
 const GPT_IMAGE_2_MAX_RATIO = 3
+const GPT_MASK_HISTORY_LIMIT = 40
+const GPT_MASK_MIN_ZOOM = 0.08
+const GPT_MASK_MAX_ZOOM = 8
 
 const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: 'auto', value: 'auto' },
@@ -182,10 +197,30 @@ const gptEditInputSource = ref<GPTEditInputSource>('upload')
 const gptReferenceImages = ref<File[]>([])
 const gptReferenceImageUrls = ref<string[]>([])
 const gptMaskImage = ref<File | null>(null)
+const gptUploadedMaskImage = ref<File | null>(null)
 const gptMaskUrl = ref('')
 const gptImageUrls = ref<string[]>([])
 const gptRevisedPrompt = ref('')
 const isHydratingGPTSettings = ref(false)
+
+const gptMaskViewportRef = ref<HTMLDivElement | null>(null)
+const gptMaskBaseCanvas = ref<HTMLCanvasElement | null>(null)
+const gptMaskDrawingCanvas = ref<HTMLCanvasElement | null>(null)
+const gptMaskReferenceObjectUrl = ref('')
+const gptMaskImageDimensions = ref<GPTMaskCanvasDimensions | null>(null)
+const gptMaskTool = ref<GPTMaskTool>('brush')
+const gptMaskBrushSize = ref(80)
+const gptMaskZoom = ref(1)
+const gptMaskPan = ref<GPTMaskPoint>({ x: 0, y: 0 })
+const gptMaskHasDrawing = ref(false)
+const gptMaskUploadKey = ref(0)
+const gptMaskUndoStack = ref<ImageData[]>([])
+const gptMaskRedoStack = ref<ImageData[]>([])
+const gptMaskActivePointerId = ref<number | null>(null)
+const gptMaskLastPoint = ref<GPTMaskPoint | null>(null)
+const gptMaskLastPanClient = ref<GPTMaskPoint | null>(null)
+const isGPTMaskDrawing = ref(false)
+const isGPTMaskPanning = ref(false)
 
 // ==================== Gemini-Image Form States ====================
 // Form state - AI Studio
@@ -458,6 +493,29 @@ const gptReferenceImageUrlsText = computed({
   }
 })
 
+const gptPrimaryReferenceImage = computed(() => gptReferenceImages.value[0] ?? null)
+
+const showGPTMaskEditor = computed(() =>
+  gptMode.value === 'edit' &&
+  gptEditInputSource.value === 'upload' &&
+  Boolean(gptPrimaryReferenceImage.value)
+)
+
+const gptMaskCanUndo = computed(() => gptMaskUndoStack.value.length > 0)
+const gptMaskCanRedo = computed(() => gptMaskRedoStack.value.length > 0)
+const gptMaskZoomLabel = computed(() => `${Math.round(gptMaskZoom.value * 100)}%`)
+
+const gptMaskCanvasStackStyle = computed(() => {
+  const dimensions = gptMaskImageDimensions.value
+  if (!dimensions) return {}
+
+  return {
+    width: `${dimensions.width}px`,
+    height: `${dimensions.height}px`,
+    transform: `translate(-50%, -50%) translate(${gptMaskPan.value.x}px, ${gptMaskPan.value.y}px) scale(${gptMaskZoom.value})`
+  }
+})
+
 function getMimeTypeFromOutputFormat(outputFormat: string): string {
   if (outputFormat === 'jpeg') return 'image/jpeg'
   if (outputFormat === 'webp') return 'image/webp'
@@ -697,7 +755,19 @@ watch(gptEditInputSource, (source) => {
   } else {
     gptReferenceImages.value = []
     gptMaskImage.value = null
+    gptUploadedMaskImage.value = null
+    gptMaskUploadKey.value += 1
+    loadGPTMaskReferenceImage(null)
   }
+})
+
+watch(gptPrimaryReferenceImage, (file, previousFile) => {
+  if (file === previousFile) return
+
+  gptUploadedMaskImage.value = null
+  gptMaskImage.value = null
+  gptMaskUploadKey.value += 1
+  loadGPTMaskReferenceImage(file)
 })
 
 watch(formGPT, () => {
@@ -912,7 +982,10 @@ function handleGPTImageChange(options: { fileList: UploadFileInfo[] }) {
 
 function handleGPTMaskChange(options: { file: UploadFileInfo }) {
   const file = options.file.file
-  gptMaskImage.value = file || null
+  gptUploadedMaskImage.value = file || null
+  if (!gptMaskHasDrawing.value) {
+    gptMaskImage.value = gptUploadedMaskImage.value
+  }
 }
 
 function handleFluxImageChange(options: { file: UploadFileInfo }) {
@@ -943,6 +1016,389 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
   }
   const byteArray = new Uint8Array(byteNumbers)
   return new Blob([byteArray], { type: mimeType })
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getGPTMaskContext(): CanvasRenderingContext2D | null {
+  return gptMaskDrawingCanvas.value?.getContext('2d') ?? null
+}
+
+function getGPTMaskImageData(): ImageData | null {
+  const canvas = gptMaskDrawingCanvas.value
+  const context = getGPTMaskContext()
+  const dimensions = gptMaskImageDimensions.value
+  if (!canvas || !context || !dimensions) return null
+
+  return context.getImageData(0, 0, dimensions.width, dimensions.height)
+}
+
+function restoreGPTMaskImageData(imageData: ImageData) {
+  const context = getGPTMaskContext()
+  const dimensions = gptMaskImageDimensions.value
+  if (!context || !dimensions) return
+
+  context.clearRect(0, 0, dimensions.width, dimensions.height)
+  context.putImageData(imageData, 0, 0)
+  updateGPTMaskHasDrawingFromCanvas()
+}
+
+function pushGPTMaskUndoState() {
+  const imageData = getGPTMaskImageData()
+  if (!imageData) return
+
+  gptMaskUndoStack.value.push(imageData)
+  if (gptMaskUndoStack.value.length > GPT_MASK_HISTORY_LIMIT) {
+    gptMaskUndoStack.value.shift()
+  }
+  gptMaskRedoStack.value = []
+}
+
+function updateGPTMaskHasDrawingFromCanvas(): boolean {
+  const imageData = getGPTMaskImageData()
+  if (!imageData) {
+    gptMaskHasDrawing.value = false
+    return false
+  }
+
+  const data = imageData.data
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 0) {
+      gptMaskHasDrawing.value = true
+      return true
+    }
+  }
+
+  gptMaskHasDrawing.value = false
+  return false
+}
+
+function resetGPTMaskDrawingState() {
+  const context = getGPTMaskContext()
+  const dimensions = gptMaskImageDimensions.value
+  if (context && dimensions) {
+    context.clearRect(0, 0, dimensions.width, dimensions.height)
+  }
+
+  gptMaskUndoStack.value = []
+  gptMaskRedoStack.value = []
+  gptMaskHasDrawing.value = false
+  gptMaskImage.value = gptUploadedMaskImage.value
+}
+
+function drawGPTMaskBaseImage(image: HTMLImageElement) {
+  const canvas = gptMaskBaseCanvas.value
+  const context = canvas?.getContext('2d')
+  const dimensions = gptMaskImageDimensions.value
+  if (!canvas || !context || !dimensions) return
+
+  context.clearRect(0, 0, dimensions.width, dimensions.height)
+  context.drawImage(image, 0, 0, dimensions.width, dimensions.height)
+}
+
+async function loadGPTMaskReferenceImage(file: File | null) {
+  if (gptMaskReferenceObjectUrl.value) {
+    URL.revokeObjectURL(gptMaskReferenceObjectUrl.value)
+    gptMaskReferenceObjectUrl.value = ''
+  }
+
+  gptMaskImageDimensions.value = null
+  resetGPTMaskDrawingState()
+
+  if (!file) return
+
+  const objectUrl = URL.createObjectURL(file)
+  gptMaskReferenceObjectUrl.value = objectUrl
+
+  const image = new Image()
+  image.onload = async () => {
+    if (gptMaskReferenceObjectUrl.value !== objectUrl) return
+
+    gptMaskImageDimensions.value = {
+      width: image.naturalWidth,
+      height: image.naturalHeight
+    }
+
+    await nextTick()
+    drawGPTMaskBaseImage(image)
+    resetGPTMaskDrawingState()
+    fitGPTMaskEditorView()
+  }
+  image.onerror = () => {
+    if (gptMaskReferenceObjectUrl.value === objectUrl) {
+      gptMaskImageDimensions.value = null
+      message.error(t('dalle.maskEditor.loadFailed'))
+    }
+  }
+  image.src = objectUrl
+}
+
+function getGPTMaskPointerPoint(event: PointerEvent): GPTMaskPoint | null {
+  const canvas = gptMaskDrawingCanvas.value
+  const dimensions = gptMaskImageDimensions.value
+  if (!canvas || !dimensions) return null
+
+  const rect = canvas.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return null
+
+  return {
+    x: clamp((event.clientX - rect.left) * (dimensions.width / rect.width), 0, dimensions.width),
+    y: clamp((event.clientY - rect.top) * (dimensions.height / rect.height), 0, dimensions.height)
+  }
+}
+
+function drawGPTMaskPoint(point: GPTMaskPoint) {
+  const context = getGPTMaskContext()
+  if (!context) return
+
+  context.save()
+  context.globalCompositeOperation = gptMaskTool.value === 'eraser' ? 'destination-out' : 'source-over'
+  context.fillStyle = 'rgba(244, 63, 94, 0.62)'
+  context.beginPath()
+  context.arc(point.x, point.y, gptMaskBrushSize.value / 2, 0, Math.PI * 2)
+  context.fill()
+  context.restore()
+
+  if (gptMaskTool.value === 'brush') {
+    gptMaskHasDrawing.value = true
+  }
+}
+
+function drawGPTMaskLine(from: GPTMaskPoint, to: GPTMaskPoint) {
+  const context = getGPTMaskContext()
+  if (!context) return
+
+  context.save()
+  context.globalCompositeOperation = gptMaskTool.value === 'eraser' ? 'destination-out' : 'source-over'
+  context.strokeStyle = 'rgba(244, 63, 94, 0.62)'
+  context.lineWidth = gptMaskBrushSize.value
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  context.beginPath()
+  context.moveTo(from.x, from.y)
+  context.lineTo(to.x, to.y)
+  context.stroke()
+  context.restore()
+
+  if (gptMaskTool.value === 'brush') {
+    gptMaskHasDrawing.value = true
+  }
+}
+
+function handleGPTMaskPointerDown(event: PointerEvent) {
+  if (!gptMaskImageDimensions.value) return
+
+  event.preventDefault()
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  gptMaskActivePointerId.value = event.pointerId
+
+  if (gptMaskTool.value === 'pan') {
+    isGPTMaskPanning.value = true
+    gptMaskLastPanClient.value = { x: event.clientX, y: event.clientY }
+    return
+  }
+
+  const point = getGPTMaskPointerPoint(event)
+  if (!point) return
+
+  pushGPTMaskUndoState()
+  isGPTMaskDrawing.value = true
+  gptMaskLastPoint.value = point
+  drawGPTMaskPoint(point)
+}
+
+function handleGPTMaskPointerMove(event: PointerEvent) {
+  if (gptMaskActivePointerId.value !== event.pointerId) return
+
+  if (isGPTMaskPanning.value && gptMaskLastPanClient.value) {
+    const dx = event.clientX - gptMaskLastPanClient.value.x
+    const dy = event.clientY - gptMaskLastPanClient.value.y
+    gptMaskPan.value = {
+      x: gptMaskPan.value.x + dx,
+      y: gptMaskPan.value.y + dy
+    }
+    gptMaskLastPanClient.value = { x: event.clientX, y: event.clientY }
+    return
+  }
+
+  if (!isGPTMaskDrawing.value || !gptMaskLastPoint.value) return
+
+  const point = getGPTMaskPointerPoint(event)
+  if (!point) return
+
+  drawGPTMaskLine(gptMaskLastPoint.value, point)
+  gptMaskLastPoint.value = point
+}
+
+function handleGPTMaskPointerUp(event: PointerEvent) {
+  if (gptMaskActivePointerId.value !== event.pointerId) return
+
+  const target = event.currentTarget as HTMLElement
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId)
+  }
+  gptMaskActivePointerId.value = null
+  gptMaskLastPoint.value = null
+  gptMaskLastPanClient.value = null
+  isGPTMaskDrawing.value = false
+  isGPTMaskPanning.value = false
+  updateGPTMaskHasDrawingFromCanvas()
+}
+
+function undoGPTMaskEdit() {
+  const previous = gptMaskUndoStack.value.pop()
+  const current = getGPTMaskImageData()
+  if (!previous || !current) return
+
+  gptMaskRedoStack.value.push(current)
+  restoreGPTMaskImageData(previous)
+}
+
+function redoGPTMaskEdit() {
+  const next = gptMaskRedoStack.value.pop()
+  const current = getGPTMaskImageData()
+  if (!next || !current) return
+
+  gptMaskUndoStack.value.push(current)
+  restoreGPTMaskImageData(next)
+}
+
+function clearGPTMaskDrawing() {
+  const context = getGPTMaskContext()
+  const dimensions = gptMaskImageDimensions.value
+  if (!context || !dimensions) return
+
+  pushGPTMaskUndoState()
+  context.clearRect(0, 0, dimensions.width, dimensions.height)
+  updateGPTMaskHasDrawingFromCanvas()
+}
+
+function fillGPTMaskDrawing() {
+  const context = getGPTMaskContext()
+  const dimensions = gptMaskImageDimensions.value
+  if (!context || !dimensions) return
+
+  pushGPTMaskUndoState()
+  context.save()
+  context.globalCompositeOperation = 'source-over'
+  context.fillStyle = 'rgba(244, 63, 94, 0.62)'
+  context.fillRect(0, 0, dimensions.width, dimensions.height)
+  context.restore()
+  updateGPTMaskHasDrawingFromCanvas()
+}
+
+function invertGPTMaskDrawing() {
+  const context = getGPTMaskContext()
+  const dimensions = gptMaskImageDimensions.value
+  const imageData = getGPTMaskImageData()
+  if (!context || !dimensions || !imageData) return
+
+  pushGPTMaskUndoState()
+  const data = imageData.data
+  for (let i = 0; i < data.length; i += 4) {
+    const isMasked = data[i + 3] > 0
+    data[i] = 244
+    data[i + 1] = 63
+    data[i + 2] = 94
+    data[i + 3] = isMasked ? 0 : 158
+  }
+  context.putImageData(imageData, 0, 0)
+  updateGPTMaskHasDrawingFromCanvas()
+}
+
+function fitGPTMaskEditorView() {
+  const viewport = gptMaskViewportRef.value
+  const dimensions = gptMaskImageDimensions.value
+  if (!viewport || !dimensions) return
+
+  const availableWidth = Math.max(120, viewport.clientWidth - 40)
+  const availableHeight = Math.max(120, viewport.clientHeight - 40)
+  gptMaskZoom.value = clamp(
+    Math.min(availableWidth / dimensions.width, availableHeight / dimensions.height, 1),
+    GPT_MASK_MIN_ZOOM,
+    GPT_MASK_MAX_ZOOM
+  )
+  gptMaskPan.value = { x: 0, y: 0 }
+}
+
+function resetGPTMaskEditorView() {
+  gptMaskZoom.value = 1
+  gptMaskPan.value = { x: 0, y: 0 }
+}
+
+function adjustGPTMaskZoom(multiplier: number) {
+  gptMaskZoom.value = clamp(gptMaskZoom.value * multiplier, GPT_MASK_MIN_ZOOM, GPT_MASK_MAX_ZOOM)
+}
+
+function handleGPTMaskWheel(event: WheelEvent) {
+  if (!gptMaskImageDimensions.value) return
+  adjustGPTMaskZoom(event.deltaY < 0 ? 1.08 : 1 / 1.08)
+}
+
+async function exportGPTMaskFile(): Promise<File | null> {
+  const sourceCanvas = gptMaskDrawingCanvas.value
+  const sourceContext = sourceCanvas?.getContext('2d')
+  const dimensions = gptMaskImageDimensions.value
+  if (!sourceCanvas || !sourceContext || !dimensions) return null
+
+  if (!updateGPTMaskHasDrawingFromCanvas()) return null
+
+  const maskPixels = sourceContext.getImageData(0, 0, dimensions.width, dimensions.height)
+  const exportCanvas = document.createElement('canvas')
+  exportCanvas.width = dimensions.width
+  exportCanvas.height = dimensions.height
+  const exportContext = exportCanvas.getContext('2d')
+  if (!exportContext) return null
+
+  const output = exportContext.createImageData(dimensions.width, dimensions.height)
+  const source = maskPixels.data
+  const target = output.data
+  for (let i = 0; i < source.length; i += 4) {
+    const shouldEdit = source[i + 3] > 0
+    target[i] = 255
+    target[i + 1] = 255
+    target[i + 2] = 255
+    target[i + 3] = shouldEdit ? 0 : 255
+  }
+
+  exportContext.putImageData(output, 0, 0)
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    exportCanvas.toBlob(resolve, 'image/png')
+  })
+  if (!blob) return null
+
+  return new File([blob], `gpt-image-mask-${Date.now()}.png`, { type: 'image/png' })
+}
+
+async function downloadGPTMaskFile() {
+  const file = await exportGPTMaskFile()
+  if (!file) {
+    message.warning(t('dalle.maskEditor.emptyMaskWarning'))
+    return
+  }
+
+  const url = URL.createObjectURL(file)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.name
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function resolveGPTMaskImageForSubmit(): Promise<File | null> {
+  if (gptEditInputSource.value !== 'upload') return null
+
+  const visualMask = await exportGPTMaskFile()
+  if (visualMask) {
+    gptMaskImage.value = visualMask
+    return visualMask
+  }
+
+  gptMaskImage.value = gptUploadedMaskImage.value
+  return gptMaskImage.value
 }
 
 // ==================== GPT-Image Submit ====================
@@ -991,8 +1447,9 @@ async function handleSubmitGPT() {
           fd.append('image[]', file, file.name)
         })
 
-        if (gptMaskImage.value) {
-          fd.set('mask', gptMaskImage.value, gptMaskImage.value.name)
+        const maskImage = await resolveGPTMaskImageForSubmit()
+        if (maskImage) {
+          fd.set('mask', maskImage, maskImage.name)
         }
 
         appendGPTImageOptions(fd)
@@ -1543,6 +2000,7 @@ onUnmounted(() => {
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
   if (fluxImageUrl.value) URL.revokeObjectURL(fluxImageUrl.value)
   gptImageUrls.value.forEach(url => URL.revokeObjectURL(url))
+  if (gptMaskReferenceObjectUrl.value) URL.revokeObjectURL(gptMaskReferenceObjectUrl.value)
 })
 </script>
 
@@ -1953,14 +2411,159 @@ onUnmounted(() => {
                   v-if="gptMode === 'edit' && gptEditInputSource === 'upload'"
                   :label="t('dalle.mask')"
                 >
-                  <NUpload
-                    accept="image/png"
-                    :max="1"
-                    :default-upload="false"
-                    @change="handleGPTMaskChange"
-                  >
-                    <NButton>{{ t('dalle.uploadMask') }}</NButton>
-                  </NUpload>
+                  <NSpace vertical style="width: 100%">
+                    <NAlert type="info" class="mask-editor-alert">
+                      {{ t('dalle.maskEditor.scopeHint') }}
+                    </NAlert>
+
+                    <div v-if="!showGPTMaskEditor" class="form-hint">
+                      {{ t('dalle.maskEditor.noReference') }}
+                    </div>
+
+                    <div v-else class="gpt-mask-editor">
+                      <div class="gpt-mask-editor-header">
+                        <div>
+                          <div class="gpt-mask-editor-title">{{ t('dalle.maskEditor.title') }}</div>
+                          <div class="gpt-mask-editor-subtitle">
+                            {{ t('dalle.maskEditor.subtitle') }}
+                          </div>
+                        </div>
+                        <NTag :type="gptMaskHasDrawing ? 'success' : 'default'" size="small">
+                          {{ gptMaskHasDrawing ? t('dalle.maskEditor.maskReady') : t('dalle.maskEditor.noMask') }}
+                        </NTag>
+                      </div>
+
+                      <div class="gpt-mask-toolbar">
+                        <NSpace wrap align="center">
+                          <NButton
+                            size="small"
+                            :type="gptMaskTool === 'brush' ? 'primary' : 'default'"
+                            @click="gptMaskTool = 'brush'"
+                          >
+                            {{ t('dalle.maskEditor.brush') }}
+                          </NButton>
+                          <NButton
+                            size="small"
+                            :type="gptMaskTool === 'eraser' ? 'primary' : 'default'"
+                            @click="gptMaskTool = 'eraser'"
+                          >
+                            {{ t('dalle.maskEditor.eraser') }}
+                          </NButton>
+                          <NButton
+                            size="small"
+                            :type="gptMaskTool === 'pan' ? 'primary' : 'default'"
+                            @click="gptMaskTool = 'pan'"
+                          >
+                            {{ t('dalle.maskEditor.pan') }}
+                          </NButton>
+                        </NSpace>
+
+                        <div class="gpt-mask-brush-control">
+                          <span>{{ t('dalle.maskEditor.brushSize') }}</span>
+                          <NSlider v-model:value="gptMaskBrushSize" :min="8" :max="240" :step="4" />
+                          <NInputNumber
+                            v-model:value="gptMaskBrushSize"
+                            :min="8"
+                            :max="240"
+                            :step="4"
+                            size="small"
+                            style="width: 86px"
+                          />
+                        </div>
+                      </div>
+
+                      <div
+                        ref="gptMaskViewportRef"
+                        class="gpt-mask-stage"
+                        :class="`tool-${gptMaskTool}`"
+                        @pointerdown="handleGPTMaskPointerDown"
+                        @pointermove="handleGPTMaskPointerMove"
+                        @pointerup="handleGPTMaskPointerUp"
+                        @pointercancel="handleGPTMaskPointerUp"
+                        @wheel.prevent="handleGPTMaskWheel"
+                      >
+                        <div
+                          v-if="gptMaskImageDimensions"
+                          class="gpt-mask-canvas-stack"
+                          :style="gptMaskCanvasStackStyle"
+                        >
+                          <canvas
+                            ref="gptMaskBaseCanvas"
+                            class="gpt-mask-base-canvas"
+                            :width="gptMaskImageDimensions.width"
+                            :height="gptMaskImageDimensions.height"
+                          />
+                          <canvas
+                            ref="gptMaskDrawingCanvas"
+                            class="gpt-mask-drawing-canvas"
+                            :width="gptMaskImageDimensions.width"
+                            :height="gptMaskImageDimensions.height"
+                          />
+                        </div>
+                        <div v-else class="gpt-mask-loading">
+                          {{ t('dalle.maskEditor.loading') }}
+                        </div>
+                      </div>
+
+                      <div class="gpt-mask-actions">
+                        <NSpace wrap align="center">
+                          <NButton size="small" :disabled="!gptMaskCanUndo" @click="undoGPTMaskEdit">
+                            {{ t('dalle.maskEditor.undo') }}
+                          </NButton>
+                          <NButton size="small" :disabled="!gptMaskCanRedo" @click="redoGPTMaskEdit">
+                            {{ t('dalle.maskEditor.redo') }}
+                          </NButton>
+                          <NButton size="small" @click="clearGPTMaskDrawing">
+                            {{ t('dalle.maskEditor.clear') }}
+                          </NButton>
+                          <NButton size="small" @click="invertGPTMaskDrawing">
+                            {{ t('dalle.maskEditor.invert') }}
+                          </NButton>
+                          <NButton size="small" @click="fillGPTMaskDrawing">
+                            {{ t('dalle.maskEditor.fill') }}
+                          </NButton>
+                          <NButton size="small" @click="downloadGPTMaskFile">
+                            {{ t('dalle.maskEditor.download') }}
+                          </NButton>
+                        </NSpace>
+
+                        <NSpace wrap align="center">
+                          <NButton size="small" @click="adjustGPTMaskZoom(1 / 1.15)">-</NButton>
+                          <span class="gpt-mask-zoom-label">{{ gptMaskZoomLabel }}</span>
+                          <NButton size="small" @click="adjustGPTMaskZoom(1.15)">+</NButton>
+                          <NButton size="small" @click="fitGPTMaskEditorView">
+                            {{ t('dalle.maskEditor.fit') }}
+                          </NButton>
+                          <NButton size="small" @click="resetGPTMaskEditorView">
+                            {{ t('dalle.maskEditor.resetView') }}
+                          </NButton>
+                        </NSpace>
+                      </div>
+
+                      <div class="gpt-mask-editor-footnote">
+                        {{ t('dalle.maskEditor.exportHint') }}
+                      </div>
+                    </div>
+
+                    <div class="gpt-mask-fallback">
+                      <div class="gpt-mask-fallback-title">{{ t('dalle.maskEditor.fallbackTitle') }}</div>
+                      <NUpload
+                        :key="gptMaskUploadKey"
+                        accept="image/png"
+                        :max="1"
+                        :default-upload="false"
+                        @change="handleGPTMaskChange"
+                      >
+                        <NButton size="small">{{ t('dalle.uploadMask') }}</NButton>
+                      </NUpload>
+                      <div v-if="gptUploadedMaskImage && !gptMaskHasDrawing" class="form-hint">
+                        {{ t('dalle.maskEditor.fallbackActive') }}
+                      </div>
+                      <div v-else class="form-hint">
+                        {{ t('dalle.maskEditor.fallbackHint') }}
+                      </div>
+                    </div>
+                  </NSpace>
                 </NFormItem>
 
                 <NFormItem
@@ -2745,6 +3348,147 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.mask-editor-alert {
+  margin-bottom: 4px;
+}
+
+.gpt-mask-editor {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(14, 20, 34, 0.9), rgba(9, 14, 24, 0.94));
+}
+
+.gpt-mask-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.gpt-mask-editor-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.gpt-mask-editor-subtitle,
+.gpt-mask-editor-footnote,
+.gpt-mask-fallback .form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.gpt-mask-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.gpt-mask-brush-control {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.gpt-mask-stage {
+  position: relative;
+  height: 420px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%),
+    #0a0f1a;
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.gpt-mask-stage.tool-brush,
+.gpt-mask-stage.tool-eraser {
+  cursor: crosshair;
+}
+
+.gpt-mask-stage.tool-pan {
+  cursor: grab;
+}
+
+.gpt-mask-canvas-stack {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.36);
+}
+
+.gpt-mask-base-canvas,
+.gpt-mask-drawing-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.gpt-mask-base-canvas {
+  background: #0f172a;
+}
+
+.gpt-mask-drawing-canvas {
+  mix-blend-mode: normal;
+}
+
+.gpt-mask-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+}
+
+.gpt-mask-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.gpt-mask-zoom-label {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.gpt-mask-fallback {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gpt-mask-fallback-title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* GPT-Image multi-image grid */
 .images-grid {
   display: grid;
@@ -2895,6 +3639,21 @@ onUnmounted(() => {
   .custom-size-editor-grid,
   .custom-size-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .gpt-mask-editor-header,
+  .gpt-mask-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gpt-mask-toolbar,
+  .gpt-mask-brush-control {
+    grid-template-columns: 1fr;
+  }
+
+  .gpt-mask-stage {
+    height: 320px;
   }
 
   .preview-card-header {
