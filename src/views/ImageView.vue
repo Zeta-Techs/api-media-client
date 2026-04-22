@@ -28,8 +28,8 @@ function goToSettings() {
 // Batch mode toggle
 const isBatchMode = ref(false)
 
-// Main tab: Nano Banana (Gemini), GPT-Image, Flux
-const mainTab = ref<'nano-banana' | 'gpt-image' | 'flux'>('nano-banana')
+// Main tab: GPT-Image, Nano Banana (Gemini), Flux
+const mainTab = ref<'nano-banana' | 'gpt-image' | 'flux'>('gpt-image')
 // Sub-tab for Nano Banana (Gemini-Image)
 const geminiSubTab = ref<'ai-studio' | 'vertex'>('ai-studio')
 
@@ -662,6 +662,36 @@ const actualFluxModel = computed(() =>
 
 const currentFluxModelInfo = computed(() => {
   return fluxModelOptions.find(m => m.value === formFlux.value.model)
+})
+
+const previewModelLabel = computed(() => {
+  if (mainTab.value === 'gpt-image') return 'GPT-Image'
+  if (mainTab.value === 'flux') return 'Flux'
+  return 'Nano Banana'
+})
+
+const previewHasResult = computed(() => {
+  if (mainTab.value === 'gpt-image') return gptImageUrls.value.length > 0
+  if (mainTab.value === 'flux') return Boolean(fluxImageUrl.value)
+  return Boolean(imageUrl.value)
+})
+
+const previewStatusText = computed(() => {
+  if (isLoading.value) return t('image.preview.status.generating')
+  if (previewHasResult.value) return t('image.preview.status.ready')
+  return t('image.preview.status.idle')
+})
+
+const previewEmptyTitle = computed(() => {
+  if (mainTab.value === 'gpt-image') return t('image.preview.empty.gptImageTitle')
+  if (mainTab.value === 'flux') return t('image.preview.empty.fluxTitle')
+  return t('image.preview.empty.nanoBananaTitle')
+})
+
+const previewEmptyDescription = computed(() => {
+  if (mainTab.value === 'gpt-image') return t('image.preview.empty.gptImageDescription')
+  if (mainTab.value === 'flux') return t('image.preview.empty.fluxDescription')
+  return t('image.preview.empty.nanoBananaDescription')
 })
 
 // Flux settings persistence
@@ -1373,8 +1403,8 @@ onUnmounted(() => {
     <div v-else class="image-layout">
         <!-- Form Section -->
         <NCard class="glass-card form-card">
-          <!-- Main Tabs: Nano Banana, GPT-Image, Flux -->
-          <NTabs v-model:value="mainTab" type="segment" animated>
+          <!-- Main Tabs -->
+          <NTabs v-model:value="mainTab" type="segment" animated class="main-tabs">
             <!-- Nano Banana Tab (Gemini-Image) -->
             <NTabPane name="nano-banana" tab="Nano Banana">
               <!-- Sub-tabs for AI Studio vs Vertex -->
@@ -2004,22 +2034,32 @@ onUnmounted(() => {
 
         <!-- Preview Section -->
         <div class="preview-section">
-          <!-- Revised Prompt (GPT-Image only) -->
-          <NAlert v-if="gptRevisedPrompt && mainTab === 'gpt-image'" type="info" class="revised-prompt">
-            <template #header>{{ t('dalle.revisedPrompt') }}</template>
-            {{ gptRevisedPrompt }}
-          </NAlert>
-
           <NCard class="glass-card preview-card">
             <template #header>
-              <span style="font-size: 14px; font-weight: 600;">{{ t('common.status') }}</span>
+              <div class="preview-card-header">
+                <div>
+                  <div class="preview-card-title">{{ t('image.preview.title') }}</div>
+                  <div class="preview-card-subtitle">{{ previewStatusText }}</div>
+                </div>
+                <NTag size="small" round>{{ previewModelLabel }}</NTag>
+              </div>
             </template>
 
-            <NAlert v-if="errorMessage" type="error" style="margin-bottom: 16px">
+            <NAlert v-if="isLoading" type="warning" class="preview-notice">
+              {{ t('image.preview.refreshNotice') }}
+            </NAlert>
+
+            <NAlert v-if="gptRevisedPrompt && mainTab === 'gpt-image'" type="info" class="revised-prompt">
+              <template #header>{{ t('dalle.revisedPrompt') }}</template>
+              {{ gptRevisedPrompt }}
+            </NAlert>
+
+            <NAlert v-if="errorMessage" type="error" class="preview-error">
               {{ errorMessage }}
             </NAlert>
 
-            <NSpin :show="isLoading">
+            <div class="preview-stage" :class="{ 'is-empty': !previewHasResult }">
+              <NSpin :show="isLoading">
               <!-- GPT-Image Results (multiple images) -->
               <template v-if="mainTab === 'gpt-image' && gptImageUrls.length > 0">
                 <div class="images-grid">
@@ -2037,6 +2077,7 @@ onUnmounted(() => {
                     </div>
                   </div>
                 </div>
+                <div class="preview-supporting-text">{{ t('image.preview.clickToZoom') }}</div>
               </template>
 
               <!-- Nano Banana (Gemini-Image) Result (single image) -->
@@ -2048,6 +2089,8 @@ onUnmounted(() => {
                 <div v-if="imageInfo" class="image-info">
                   {{ imageInfo.width }} × {{ imageInfo.height }} | {{ imageInfo.size }} | {{ imageInfo.type }}
                 </div>
+
+                <div class="preview-supporting-text">{{ t('image.preview.clickToZoom') }}</div>
 
                 <NButton
                   type="primary"
@@ -2069,6 +2112,8 @@ onUnmounted(() => {
                   {{ fluxImageInfo.width }} × {{ fluxImageInfo.height }} | {{ fluxImageInfo.size }} | {{ fluxImageInfo.type }}
                 </div>
 
+                <div class="preview-supporting-text">{{ t('image.preview.clickToZoom') }}</div>
+
                 <NButton
                   type="primary"
                   block
@@ -2082,9 +2127,12 @@ onUnmounted(() => {
               <!-- Placeholder -->
               <div v-else class="image-placeholder">
                 <div class="placeholder-icon">🖼️</div>
-                <div class="placeholder-text">{{ t('image.generating') }}</div>
+                <div class="placeholder-badge">{{ previewModelLabel }}</div>
+                <div class="placeholder-title">{{ previewEmptyTitle }}</div>
+                <div class="placeholder-text">{{ previewEmptyDescription }}</div>
               </div>
             </NSpin>
+            </div>
           </NCard>
         </div>
       </div>
@@ -2169,11 +2217,27 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
+.main-tabs :deep(.n-tabs-nav-scroll-content) {
+  display: flex;
+}
+
+.main-tabs :deep(.n-tabs-tab:nth-child(1)) {
+  order: 2;
+}
+
+.main-tabs :deep(.n-tabs-tab:nth-child(2)) {
+  order: 1;
+}
+
+.main-tabs :deep(.n-tabs-tab:nth-child(3)) {
+  order: 3;
+}
+
 .image-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
   gap: 24px;
-  align-items: stretch;
+  align-items: start;
 }
 
 @media (max-width: 1024px) {
@@ -2191,7 +2255,7 @@ onUnmounted(() => {
 .preview-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  min-width: 0;
 }
 
 .preview-section > :last-child {
@@ -2208,6 +2272,58 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+
+.preview-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preview-card-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.preview-card-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.preview-notice,
+.preview-error,
+.revised-prompt {
+  margin-bottom: 0;
+}
+
+.preview-stage {
+  flex: 1;
+  min-height: 520px;
+}
+
+.preview-stage.is-empty {
+  display: flex;
+}
+
+.preview-stage :deep(.n-spin-body),
+.preview-stage :deep(.n-spin-container) {
+  width: 100%;
+  height: 100%;
+}
+
+.preview-stage :deep(.n-spin-container) {
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-supporting-text {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.58);
+  text-align: center;
 }
 
 .revised-prompt {
@@ -2296,22 +2412,47 @@ onUnmounted(() => {
 
 .image-placeholder {
   width: 100%;
-  min-height: 300px;
+  min-height: 520px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 14px;
+  padding: 32px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top, rgba(34, 211, 238, 0.1), transparent 38%),
+    linear-gradient(180deg, rgba(20, 26, 42, 0.92), rgba(12, 18, 30, 0.96));
 }
 
 .placeholder-icon {
-  font-size: 48px;
-  opacity: 0.3;
+  display: none;
+}
+
+.placeholder-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  color: #67e8f9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.placeholder-title {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  max-width: 22ch;
 }
 
 .placeholder-text {
   font-size: 14px;
-  opacity: 0.5;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.62);
+  text-align: center;
+  max-width: 34ch;
 }
 
 .image-info {
@@ -2335,5 +2476,21 @@ onUnmounted(() => {
   margin-top: 12px;
   font-size: 14px;
   opacity: 0.8;
+}
+
+@media (max-width: 640px) {
+  .preview-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .image-placeholder {
+    min-height: 360px;
+    padding: 24px;
+  }
+
+  .placeholder-title {
+    font-size: 18px;
+  }
 }
 </style>

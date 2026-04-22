@@ -83,6 +83,24 @@
     "generate": "生成图片",
     "generating": "图片生成中...",
     "imageReady": "图片已就绪",
+    "preview": {
+      "title": "结果预览",
+      "refreshNotice": "正在生成图片，请不要刷新页面或关闭当前标签页。",
+      "clickToZoom": "点击图片可查看大图",
+      "status": {
+        "idle": "等待生成，结果会显示在这里。",
+        "generating": "正在生成图片，结果准备好后会显示在这里。",
+        "ready": "预览已更新，可查看大图或下载。"
+      },
+      "empty": {
+        "gptImageTitle": "GPT-Image 结果会显示在这里",
+        "gptImageDescription": "左侧可进行生成或编辑，完成后可在这里预览并下载生成结果。",
+        "nanoBananaTitle": "Nano Banana 结果会显示在这里",
+        "nanoBananaDescription": "在左侧提交提示词后，生成的 Gemini 图片会显示在这里。",
+        "fluxTitle": "Flux 结果会显示在这里",
+        "fluxDescription": "在左侧配置 Flux 后，生成或编辑后的图片会显示在这里。"
+      }
+    },
     "format": {
       "aiStudio": "AI Studio 格式",
       "vertex": "Vertex 格式"

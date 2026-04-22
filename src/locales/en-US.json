@@ -83,6 +83,24 @@
     "generate": "Generate Image",
     "generating": "Generating image...",
     "imageReady": "Image Ready",
+    "preview": {
+      "title": "Result Preview",
+      "refreshNotice": "Image generation is in progress. Please do not refresh this page or close the current tab.",
+      "clickToZoom": "Click the image to open a larger preview",
+      "status": {
+        "idle": "Waiting for generation. Results will appear here.",
+        "generating": "Generating image. Results will appear here when ready.",
+        "ready": "Preview updated. You can view it larger or download it."
+      },
+      "empty": {
+        "gptImageTitle": "GPT-Image results will appear here",
+        "gptImageDescription": "Generate or edit on the left. Completed images will be shown here for preview and download.",
+        "nanoBananaTitle": "Nano Banana results will appear here",
+        "nanoBananaDescription": "Submit a prompt on the left, then preview the generated Gemini image here.",
+        "fluxTitle": "Flux results will appear here",
+        "fluxDescription": "Configure Flux on the left. The generated or edited image will appear here when ready."
+      }
+    },
     "format": {
       "aiStudio": "AI Studio Format",
       "vertex": "Vertex Format"
