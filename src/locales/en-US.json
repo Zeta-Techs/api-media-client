@@ -102,6 +102,7 @@
       "ultraTall": "Ultra Tall"
     },
     "models": {
+      "gptImage2Desc": "Latest GPT Image model with flexible sizes, high-fidelity edits, and GPT Image moderation controls",
       "gptImage1Desc": "Latest image model with transparency and quality options",
       "dalle3Desc": "DALL·E 3, highest quality with prompt enhancement",
       "dalle2Desc": "DALL·E 2, classic model with edit support"
@@ -282,15 +283,37 @@
     "prompt": "Prompt",
     "promptPlaceholder": "Describe the image you want to generate...",
     "referenceImages": "Reference Images",
+    "referenceImagesRequired": "Upload at least one reference image to edit",
+    "referenceImageUrls": "Reference Image URLs",
+    "referenceImageUrlsRequired": "Enter at least one reference image URL to edit",
+    "referenceImageUrlsPlaceholder": "https://example.com/image-1.png\nhttps://example.com/image-2.png",
+    "referenceImageUrlsHint": "Enter one HTTPS image URL per line, up to 10 images",
     "mask": "Mask Image",
+    "maskUrl": "Mask URL",
+    "maskUrlPlaceholder": "https://example.com/mask.png",
     "uploadMask": "Upload Mask (PNG)",
+    "editInputSource": "Edit Input",
+    "editInputSources": {
+      "upload": "Upload Files",
+      "url": "Use URLs"
+    },
     "size": "Size",
+    "customSizeOption": "Custom Size",
+    "customSizePlaceholder": "e.g. 2048x1152",
+    "customSizeHint": "For gpt-image-2, custom sizes must be multiples of 16, max edge 3840, max ratio 3:1, and between 655,360 and 8,294,400 pixels.",
+    "customSizeRequired": "Enter a custom image size before submitting",
+    "customSizeFormatHint": "Custom size must use the format WIDTHxHEIGHT, for example 2048x1152",
+    "customSizeMultipleOf16": "Custom size width and height must both be multiples of 16",
+    "customSizeMaxEdge": "Custom size cannot exceed 3840px on either edge",
+    "customSizeAspectRatio": "Custom size aspect ratio cannot exceed 3:1",
+    "customSizePixelRange": "Custom size must contain between 655,360 and 8,294,400 pixels",
     "quality": "Quality",
     "background": "Background",
     "outputFormat": "Output Format",
     "compression": "Compression",
     "numberOfImages": "Number of Images",
     "moderation": "Moderation",
+    "transparentBackgroundNotSupported": "gpt-image-2 does not support transparent backgrounds; switched to Auto.",
     "generate": "Generate",
     "edit": "Edit Image",
     "result": "Result",
@@ -313,6 +336,7 @@
       "low": "Low"
     },
     "models": {
+      "gptImage2Desc": "Latest GPT Image model with flexible sizes, high-fidelity edits, and GPT Image moderation controls",
       "gptImage1Desc": "Latest image model with transparency and quality options",
       "dalle3Desc": "DALL·E 3, highest quality with prompt enhancement",
       "dalle2Desc": "DALL·E 2, classic model with edit support"

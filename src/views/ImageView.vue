@@ -37,12 +37,127 @@ const geminiSubTab = ref<'ai-studio' | 'vertex'>('ai-studio')
 const DALLE_SETTINGS_KEY = 'dalle-form-settings'
 const FLUX_SETTINGS_KEY = 'flux-form-settings'
 
+type GPTEditInputSource = 'upload' | 'url'
+
+interface GPTModelCapabilities {
+  description: string
+  supportsEdit: boolean
+  supportsQuality: boolean
+  supportsBackground: boolean
+  supportsTransparentBackground: boolean
+  supportsCompression: boolean
+  supportsModeration: boolean
+  supportsMultiple: boolean
+  supportsOutputFormat: boolean
+  supportsFlexibleSize: boolean
+  defaultSize: string
+}
+
+const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: 'auto', value: 'auto' },
+  { label: '1024x1024 (Square)', value: '1024x1024' },
+  { label: '1536x1024 (Landscape)', value: '1536x1024' },
+  { label: '1024x1536 (Portrait)', value: '1024x1536' },
+  { label: '2048x2048 (2K Square)', value: '2048x2048' },
+  { label: '2048x1152 (2K Landscape)', value: '2048x1152' },
+  { label: '3840x2160 (4K Landscape)', value: '3840x2160' },
+  { label: '2160x3840 (4K Portrait)', value: '2160x3840' }
+] as const
+
+const GPT_LEGACY_SIZE_OPTIONS: Record<string, Array<{ label: string; value: string }>> = {
+  'gpt-image-1': [
+    { label: '1024x1024 (Square)', value: '1024x1024' },
+    { label: '1536x1024 (Landscape)', value: '1536x1024' },
+    { label: '1024x1536 (Portrait)', value: '1024x1536' },
+    { label: 'auto', value: 'auto' }
+  ],
+  'dall-e-3': [
+    { label: '1024x1024', value: '1024x1024' },
+    { label: '1792x1024 (Landscape)', value: '1792x1024' },
+    { label: '1024x1792 (Portrait)', value: '1024x1792' }
+  ],
+  'dall-e-2': [
+    { label: '1024x1024', value: '1024x1024' },
+    { label: '512x512', value: '512x512' },
+    { label: '256x256', value: '256x256' }
+  ]
+}
+
+const GPT_MODEL_CAPABILITIES: Record<string, GPTModelCapabilities> = {
+  'gpt-image-2': {
+    description: 'dalle.models.gptImage2Desc',
+    supportsEdit: true,
+    supportsQuality: true,
+    supportsBackground: true,
+    supportsTransparentBackground: false,
+    supportsCompression: true,
+    supportsModeration: true,
+    supportsMultiple: true,
+    supportsOutputFormat: true,
+    supportsFlexibleSize: true,
+    defaultSize: 'auto'
+  },
+  'gpt-image-1': {
+    description: 'dalle.models.gptImage1Desc',
+    supportsEdit: true,
+    supportsQuality: true,
+    supportsBackground: true,
+    supportsTransparentBackground: true,
+    supportsCompression: true,
+    supportsModeration: true,
+    supportsMultiple: true,
+    supportsOutputFormat: true,
+    supportsFlexibleSize: false,
+    defaultSize: '1024x1024'
+  },
+  'dall-e-3': {
+    description: 'dalle.models.dalle3Desc',
+    supportsEdit: false,
+    supportsQuality: true,
+    supportsBackground: false,
+    supportsTransparentBackground: false,
+    supportsCompression: false,
+    supportsModeration: false,
+    supportsMultiple: false,
+    supportsOutputFormat: false,
+    supportsFlexibleSize: false,
+    defaultSize: '1024x1024'
+  },
+  'dall-e-2': {
+    description: 'dalle.models.dalle2Desc',
+    supportsEdit: true,
+    supportsQuality: false,
+    supportsBackground: false,
+    supportsTransparentBackground: false,
+    supportsCompression: false,
+    supportsModeration: false,
+    supportsMultiple: true,
+    supportsOutputFormat: false,
+    supportsFlexibleSize: false,
+    defaultSize: '1024x1024'
+  },
+  custom: {
+    description: 'dalle.models.customDesc',
+    supportsEdit: true,
+    supportsQuality: true,
+    supportsBackground: true,
+    supportsTransparentBackground: false,
+    supportsCompression: true,
+    supportsModeration: true,
+    supportsMultiple: true,
+    supportsOutputFormat: true,
+    supportsFlexibleSize: true,
+    defaultSize: 'auto'
+  }
+}
+
 // ==================== GPT-Image (DALL·E) Form State ====================
 const formGPT = ref({
   prompt: '',
-  model: 'gpt-image-1',
+  model: 'gpt-image-2',
   customModel: '',
-  size: '1024x1024',
+  size: 'auto',
+  customSize: '',
   quality: 'auto',
   background: 'auto',
   outputFormat: 'png',
@@ -52,10 +167,14 @@ const formGPT = ref({
 })
 
 const gptMode = ref<'generate' | 'edit'>('generate')
+const gptEditInputSource = ref<GPTEditInputSource>('upload')
 const gptReferenceImages = ref<File[]>([])
+const gptReferenceImageUrls = ref<string[]>([])
 const gptMaskImage = ref<File | null>(null)
+const gptMaskUrl = ref('')
 const gptImageUrls = ref<string[]>([])
 const gptRevisedPrompt = ref('')
+const isHydratingGPTSettings = ref(false)
 
 // ==================== Gemini-Image Form States ====================
 // Form state - AI Studio
@@ -151,6 +270,11 @@ watch(selectedTemplate, (id) => {
 // ==================== GPT-Image Options ====================
 const gptModelOptions = [
   {
+    label: 'gpt-image-2 (GPT Image 2)',
+    value: 'gpt-image-2',
+    description: 'dalle.models.gptImage2Desc'
+  },
+  {
     label: 'gpt-image-1 (GPT Image)',
     value: 'gpt-image-1',
     description: 'dalle.models.gptImage1Desc'
@@ -168,28 +292,28 @@ const gptModelOptions = [
   { label: t('common.custom'), value: 'custom' }
 ]
 
-const gptSizeOptionsMap: Record<string, Array<{ label: string; value: string }>> = {
-  'gpt-image-1': [
-    { label: '1024x1024 (Square)', value: '1024x1024' },
-    { label: '1536x1024 (Landscape)', value: '1536x1024' },
-    { label: '1024x1536 (Portrait)', value: '1024x1536' },
-    { label: 'auto', value: 'auto' }
-  ],
-  'dall-e-3': [
-    { label: '1024x1024', value: '1024x1024' },
-    { label: '1792x1024 (Landscape)', value: '1792x1024' },
-    { label: '1024x1792 (Portrait)', value: '1024x1792' }
-  ],
-  'dall-e-2': [
-    { label: '1024x1024', value: '1024x1024' },
-    { label: '512x512', value: '512x512' },
-    { label: '256x256', value: '256x256' }
-  ]
-}
+const isGPTCustomModel = computed(() => formGPT.value.model === 'custom')
+const actualGPTModel = computed(() =>
+  isGPTCustomModel.value ? formGPT.value.customModel.trim() : formGPT.value.model
+)
+
+const currentGPTCapabilities = computed(() =>
+  GPT_MODEL_CAPABILITIES[formGPT.value.model] || GPT_MODEL_CAPABILITIES['gpt-image-2']
+)
 
 const gptSizeOptions = computed(() => {
-  if (formGPT.value.model === 'custom') return gptSizeOptionsMap['gpt-image-1']
-  return gptSizeOptionsMap[formGPT.value.model] || gptSizeOptionsMap['gpt-image-1']
+  const options = currentGPTCapabilities.value.supportsFlexibleSize
+    ? [...GPT_IMAGE_2_SIZE_OPTIONS]
+    : [...(GPT_LEGACY_SIZE_OPTIONS[formGPT.value.model] || GPT_LEGACY_SIZE_OPTIONS['gpt-image-1'])]
+
+  if (currentGPTCapabilities.value.supportsFlexibleSize) {
+    options.push({
+      label: t('dalle.customSizeOption'),
+      value: 'custom'
+    })
+  }
+
+  return options
 })
 
 const gptQualityOptions = computed(() => [
@@ -199,11 +323,16 @@ const gptQualityOptions = computed(() => [
   { label: t('dalle.qualityOptions.high'), value: 'high' }
 ])
 
-const gptBackgroundOptions = computed(() => [
-  { label: t('dalle.backgroundOptions.auto'), value: 'auto' },
-  { label: t('dalle.backgroundOptions.transparent'), value: 'transparent' },
-  { label: t('dalle.backgroundOptions.opaque'), value: 'opaque' }
-])
+const gptBackgroundOptions = computed(() => {
+  const options = [{ label: t('dalle.backgroundOptions.auto'), value: 'auto' }]
+  if (currentGPTCapabilities.value.supportsTransparentBackground) {
+    options.push({ label: t('dalle.backgroundOptions.transparent'), value: 'transparent' })
+  }
+  if (currentGPTCapabilities.value.supportsBackground) {
+    options.push({ label: t('dalle.backgroundOptions.opaque'), value: 'opaque' })
+  }
+  return options
+})
 
 const gptOutputFormatOptions = [
   { label: 'PNG', value: 'png' },
@@ -216,46 +345,197 @@ const gptModerationOptions = computed(() => [
   { label: t('dalle.moderationOptions.low'), value: 'low' }
 ])
 
-const isGPTCustomModel = computed(() => formGPT.value.model === 'custom')
-const actualGPTModel = computed(() =>
-  isGPTCustomModel.value ? formGPT.value.customModel : formGPT.value.model
-)
-
 const currentGPTModelInfo = computed(() => {
   return gptModelOptions.find(m => m.value === formGPT.value.model)
 })
 
-const supportsQuality = computed(() =>
-  formGPT.value.model === 'gpt-image-1' || formGPT.value.model === 'dall-e-3' || formGPT.value.model === 'custom'
-)
-
-const supportsTransparency = computed(() =>
-  formGPT.value.model === 'gpt-image-1' || formGPT.value.model === 'custom'
-)
-
+const supportsQuality = computed(() => currentGPTCapabilities.value.supportsQuality)
+const supportsBackground = computed(() => currentGPTCapabilities.value.supportsBackground)
+const supportsOutputFormat = computed(() => currentGPTCapabilities.value.supportsOutputFormat)
 const supportsCompression = computed(() =>
-  (formGPT.value.model === 'gpt-image-1' || formGPT.value.model === 'custom') &&
+  currentGPTCapabilities.value.supportsCompression &&
   (formGPT.value.outputFormat === 'jpeg' || formGPT.value.outputFormat === 'webp')
 )
-
-const supportsMultiple = computed(() =>
-  formGPT.value.model === 'gpt-image-1' || formGPT.value.model === 'dall-e-2' || formGPT.value.model === 'custom'
+const supportsMultiple = computed(() => currentGPTCapabilities.value.supportsMultiple)
+const supportsEdit = computed(() => currentGPTCapabilities.value.supportsEdit)
+const supportsFlexibleGPTSize = computed(() => currentGPTCapabilities.value.supportsFlexibleSize)
+const supportsModeration = computed(() => currentGPTCapabilities.value.supportsModeration)
+const showGPTCustomSizeInput = computed(() =>
+  supportsFlexibleGPTSize.value && formGPT.value.size === 'custom'
 )
-
-const supportsEdit = computed(() =>
-  formGPT.value.model === 'gpt-image-1' || formGPT.value.model === 'dall-e-2' || formGPT.value.model === 'custom'
+const resolvedGPTSize = computed(() =>
+  formGPT.value.size === 'custom' ? formGPT.value.customSize.trim() : formGPT.value.size
 )
+const gptReferenceImageUrlsText = computed({
+  get: () => gptReferenceImageUrls.value.join('\n'),
+  set: (value: string) => {
+    gptReferenceImageUrls.value = value
+      .split(/\r?\n/)
+      .map(item => item.trim())
+      .filter(Boolean)
+      .slice(0, 10)
+  }
+})
+
+function getMimeTypeFromOutputFormat(outputFormat: string): string {
+  if (outputFormat === 'jpeg') return 'image/jpeg'
+  if (outputFormat === 'webp') return 'image/webp'
+  return 'image/png'
+}
+
+function isPresetGPTSize(size: string): boolean {
+  return GPT_IMAGE_2_SIZE_OPTIONS.some(option => option.value === size)
+}
+
+function normalizeGPTSizeForModel(model: string) {
+  const capabilities = GPT_MODEL_CAPABILITIES[model] || GPT_MODEL_CAPABILITIES['gpt-image-2']
+
+  if (capabilities.supportsFlexibleSize) {
+    if (formGPT.value.size === 'custom') {
+      return
+    }
+
+    if (!isPresetGPTSize(formGPT.value.size) && formGPT.value.size !== 'auto') {
+      formGPT.value.customSize = formGPT.value.size
+      formGPT.value.size = 'custom'
+      return
+    }
+
+    if (!isPresetGPTSize(formGPT.value.size) && formGPT.value.size !== 'custom') {
+      formGPT.value.size = capabilities.defaultSize
+    }
+
+    return
+  }
+
+  const options = GPT_LEGACY_SIZE_OPTIONS[model] || GPT_LEGACY_SIZE_OPTIONS['gpt-image-1']
+  if (!options.find(option => option.value === formGPT.value.size)) {
+    formGPT.value.size = capabilities.defaultSize
+  }
+}
+
+function validateGPTImage2Size(size: string): string | null {
+  if (!size) return t('dalle.customSizeRequired')
+
+  const match = size.match(/^(\d+)x(\d+)$/i)
+  if (!match) return t('dalle.customSizeFormatHint')
+
+  const width = Number(match[1])
+  const height = Number(match[2])
+
+  if (width % 16 !== 0 || height % 16 !== 0) {
+    return t('dalle.customSizeMultipleOf16')
+  }
+
+  if (Math.max(width, height) > 3840) {
+    return t('dalle.customSizeMaxEdge')
+  }
+
+  const ratio = Math.max(width, height) / Math.min(width, height)
+  if (ratio > 3) {
+    return t('dalle.customSizeAspectRatio')
+  }
+
+  const totalPixels = width * height
+  if (totalPixels < 655360 || totalPixels > 8294400) {
+    return t('dalle.customSizePixelRange')
+  }
+
+  return null
+}
+
+function validateGPTRequest(): string | null {
+  if (gptMode.value === 'edit') {
+    if (gptEditInputSource.value === 'upload' && gptReferenceImages.value.length === 0) {
+      return t('dalle.referenceImagesRequired')
+    }
+
+    if (gptEditInputSource.value === 'url' && gptReferenceImageUrls.value.length === 0) {
+      return t('dalle.referenceImageUrlsRequired')
+    }
+  }
+
+  if (supportsFlexibleGPTSize.value && resolvedGPTSize.value !== 'auto') {
+    return validateGPTImage2Size(resolvedGPTSize.value)
+  }
+
+  return null
+}
+
+function appendGPTImageOptions(
+  target: Record<string, any> | FormData,
+  options: { includeMultiple?: boolean } = {}
+) {
+  const setValue = (key: string, value: string | number) => {
+    if (target instanceof FormData) {
+      target.set(key, String(value))
+    } else {
+      target[key] = value
+    }
+  }
+
+  if (options.includeMultiple && supportsMultiple.value) {
+    setValue('n', formGPT.value.n)
+  }
+
+  if (resolvedGPTSize.value !== 'auto') {
+    setValue('size', resolvedGPTSize.value)
+  }
+
+  if (supportsQuality.value) {
+    setValue('quality', formGPT.value.quality)
+  }
+
+  if (supportsBackground.value) {
+    setValue('background', formGPT.value.background)
+  }
+
+  if (supportsOutputFormat.value) {
+    setValue('output_format', formGPT.value.outputFormat)
+    if (supportsCompression.value) {
+      setValue('output_compression', formGPT.value.outputCompression)
+    }
+  }
+
+  if (supportsModeration.value) {
+    setValue('moderation', formGPT.value.moderation)
+  }
+}
 
 // Watch GPT model changes
 watch(() => formGPT.value.model, (newModel) => {
-  const options = gptSizeOptionsMap[newModel] || gptSizeOptionsMap['gpt-image-1']
-  if (!options.find(o => o.value === formGPT.value.size)) {
-    formGPT.value.size = options[0]?.value || '1024x1024'
-  }
-  if (newModel === 'dall-e-3') {
+  normalizeGPTSizeForModel(newModel)
+
+  if (!GPT_MODEL_CAPABILITIES[newModel]?.supportsMultiple) {
     formGPT.value.n = 1
   }
+
+  if (!GPT_MODEL_CAPABILITIES[newModel]?.supportsBackground) {
+    formGPT.value.background = 'auto'
+  }
+
+  if (!GPT_MODEL_CAPABILITIES[newModel]?.supportsTransparentBackground && formGPT.value.background === 'transparent') {
+    formGPT.value.background = 'auto'
+    if (!isHydratingGPTSettings.value) {
+      message.warning(t('dalle.transparentBackgroundNotSupported'))
+    }
+  }
+
+  if (!GPT_MODEL_CAPABILITIES[newModel]?.supportsModeration) {
+    formGPT.value.moderation = 'auto'
+  }
+
   saveGPTSettings()
+})
+
+watch(gptEditInputSource, (source) => {
+  if (source === 'upload') {
+    gptReferenceImageUrls.value = []
+    gptMaskUrl.value = ''
+  } else {
+    gptReferenceImages.value = []
+    gptMaskImage.value = null
+  }
 })
 
 watch(formGPT, () => {
@@ -267,34 +547,41 @@ function saveGPTSettings() {
     model: formGPT.value.model,
     customModel: formGPT.value.customModel,
     size: formGPT.value.size,
+    customSize: formGPT.value.customSize,
     quality: formGPT.value.quality,
     background: formGPT.value.background,
     outputFormat: formGPT.value.outputFormat,
     outputCompression: formGPT.value.outputCompression,
     n: formGPT.value.n,
-    moderation: formGPT.value.moderation
+    moderation: formGPT.value.moderation,
+    editInputSource: gptEditInputSource.value
   }
   localStorage.setItem(DALLE_SETTINGS_KEY, JSON.stringify(settings))
 }
 
 function loadGPTSettings() {
+  isHydratingGPTSettings.value = true
   const saved = localStorage.getItem(DALLE_SETTINGS_KEY)
   if (saved) {
     try {
       const settings = JSON.parse(saved)
-      formGPT.value.model = settings.model || 'gpt-image-1'
+      formGPT.value.model = settings.model || 'gpt-image-2'
       formGPT.value.customModel = settings.customModel || ''
-      formGPT.value.size = settings.size || '1024x1024'
+      formGPT.value.size = settings.size || 'auto'
+      formGPT.value.customSize = settings.customSize || ''
       formGPT.value.quality = settings.quality || 'auto'
       formGPT.value.background = settings.background || 'auto'
       formGPT.value.outputFormat = settings.outputFormat || 'png'
       formGPT.value.outputCompression = settings.outputCompression ?? 100
       formGPT.value.n = settings.n || 1
       formGPT.value.moderation = settings.moderation || 'auto'
+      gptEditInputSource.value = settings.editInputSource || 'upload'
     } catch {
       // Ignore
     }
   }
+  normalizeGPTSizeForModel(formGPT.value.model)
+  isHydratingGPTSettings.value = false
 }
 
 // ==================== Gemini-Image Options ====================
@@ -481,6 +768,12 @@ async function handleSubmitGPT() {
     return
   }
 
+  const validationError = validateGPTRequest()
+  if (validationError) {
+    message.error(validationError)
+    return
+  }
+
   errorMessage.value = ''
   gptRevisedPrompt.value = ''
   gptImageUrls.value.forEach(url => URL.revokeObjectURL(url))
@@ -494,64 +787,70 @@ async function handleSubmitGPT() {
   try {
     let response: any
 
-    if (gptMode.value === 'edit' && gptReferenceImages.value.length > 0) {
-      const fd = new FormData()
-      fd.set('model', actualGPTModel.value)
-      fd.set('prompt', formGPT.value.prompt)
-
-      gptReferenceImages.value.forEach((file) => {
-        fd.append('image[]', file, file.name)
-      })
-
-      if (gptMaskImage.value) {
-        fd.set('mask', gptMaskImage.value, gptMaskImage.value.name)
-      }
-
-      if (formGPT.value.size !== 'auto') {
-        fd.set('size', formGPT.value.size)
-      }
-
+    if (gptMode.value === 'edit') {
       const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/edits'
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${configStore.apiKey}`
-        },
-        body: fd,
-        signal: ctrl.signal
-      })
 
-      const text = await res.text()
-      if (!res.ok) throw parseApiError(text, res.status)
-      response = JSON.parse(text)
+      if (gptEditInputSource.value === 'upload') {
+        const fd = new FormData()
+        fd.set('model', actualGPTModel.value)
+        fd.set('prompt', formGPT.value.prompt)
+
+        gptReferenceImages.value.forEach((file) => {
+          fd.append('image[]', file, file.name)
+        })
+
+        if (gptMaskImage.value) {
+          fd.set('mask', gptMaskImage.value, gptMaskImage.value.name)
+        }
+
+        appendGPTImageOptions(fd)
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${configStore.apiKey}`
+          },
+          body: fd,
+          signal: ctrl.signal
+        })
+
+        const text = await res.text()
+        if (!res.ok) throw parseApiError(text, res.status)
+        response = JSON.parse(text)
+      } else {
+        const body: Record<string, any> = {
+          model: actualGPTModel.value,
+          prompt: formGPT.value.prompt,
+          images: gptReferenceImageUrls.value.map(imageUrl => ({ image_url: imageUrl }))
+        }
+
+        if (gptMaskUrl.value.trim()) {
+          body.mask = { image_url: gptMaskUrl.value.trim() }
+        }
+
+        appendGPTImageOptions(body)
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${configStore.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body),
+          signal: ctrl.signal
+        })
+
+        const text = await res.text()
+        if (!res.ok) throw parseApiError(text, res.status)
+        response = JSON.parse(text)
+      }
     } else {
       const body: Record<string, any> = {
         model: actualGPTModel.value,
-        prompt: formGPT.value.prompt,
-        n: formGPT.value.n
+        prompt: formGPT.value.prompt
       }
 
-      if (formGPT.value.size !== 'auto') {
-        body.size = formGPT.value.size
-      }
-
-      if (supportsQuality.value && formGPT.value.quality !== 'auto') {
-        body.quality = formGPT.value.quality
-      }
-
-      if (supportsTransparency.value && formGPT.value.background !== 'auto') {
-        body.background = formGPT.value.background
-      }
-
-      if (formGPT.value.model === 'gpt-image-1' || formGPT.value.model === 'custom') {
-        body.output_format = formGPT.value.outputFormat
-        if (supportsCompression.value) {
-          body.output_compression = formGPT.value.outputCompression
-        }
-        if (formGPT.value.moderation !== 'auto') {
-          body.moderation = formGPT.value.moderation
-        }
-      }
+      appendGPTImageOptions(body, { includeMultiple: true })
 
       const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/generations'
       const res = await fetch(url, {
@@ -573,7 +872,7 @@ async function handleSubmitGPT() {
       const urls: string[] = []
       for (const item of response.data) {
         if (item.b64_json) {
-          const mimeType = `image/${formGPT.value.outputFormat}`
+          const mimeType = getMimeTypeFromOutputFormat(formGPT.value.outputFormat)
           const blob = base64ToBlob(item.b64_json, mimeType)
           urls.push(URL.createObjectURL(blob))
         } else if (item.url) {
@@ -594,14 +893,20 @@ async function handleSubmitGPT() {
       model: formGPT.value.model,
       customModel: formGPT.value.customModel,
       format: 'gpt-image',
-      size: formGPT.value.size,
+      mode: gptMode.value,
+      editInputSource: gptEditInputSource.value,
+      size: resolvedGPTSize.value,
+      sizePreset: formGPT.value.size,
+      customSize: formGPT.value.customSize,
       quality: formGPT.value.quality,
       background: formGPT.value.background,
       outputFormat: formGPT.value.outputFormat,
       outputCompression: formGPT.value.outputCompression,
       n: formGPT.value.n,
       moderation: formGPT.value.moderation,
-      referenceImages: []
+      referenceImages: gptEditInputSource.value === 'upload' ? [...gptReferenceImages.value] : [],
+      referenceImageUrls: gptEditInputSource.value === 'url' ? [...gptReferenceImageUrls.value] : [],
+      maskUrl: gptEditInputSource.value === 'url' ? gptMaskUrl.value.trim() : ''
     }
     historyStore.addItem({
       type: 'image',
@@ -1410,8 +1715,21 @@ onUnmounted(() => {
                   />
                 </NFormItem>
 
+                <!-- Edit Input Source -->
+                <NFormItem v-if="gptMode === 'edit'" :label="t('dalle.editInputSource')">
+                  <NRadioGroup v-model:value="gptEditInputSource">
+                    <NSpace>
+                      <NRadio value="upload">{{ t('dalle.editInputSources.upload') }}</NRadio>
+                      <NRadio value="url">{{ t('dalle.editInputSources.url') }}</NRadio>
+                    </NSpace>
+                  </NRadioGroup>
+                </NFormItem>
+
                 <!-- Reference Images (Edit mode) -->
-                <NFormItem v-if="gptMode === 'edit'" :label="t('dalle.referenceImages')">
+                <NFormItem
+                  v-if="gptMode === 'edit' && gptEditInputSource === 'upload'"
+                  :label="t('dalle.referenceImages')"
+                >
                   <NUpload
                     accept="image/*"
                     :max="10"
@@ -1422,8 +1740,27 @@ onUnmounted(() => {
                   />
                 </NFormItem>
 
+                <!-- Reference Image URLs (Edit mode) -->
+                <NFormItem
+                  v-if="gptMode === 'edit' && gptEditInputSource === 'url'"
+                  :label="t('dalle.referenceImageUrls')"
+                >
+                  <NSpace vertical style="width: 100%">
+                    <NInput
+                      v-model:value="gptReferenceImageUrlsText"
+                      type="textarea"
+                      :rows="4"
+                      :placeholder="t('dalle.referenceImageUrlsPlaceholder')"
+                    />
+                    <div class="form-hint">{{ t('dalle.referenceImageUrlsHint') }}</div>
+                  </NSpace>
+                </NFormItem>
+
                 <!-- Mask (Edit mode) -->
-                <NFormItem v-if="gptMode === 'edit'" :label="t('dalle.mask')">
+                <NFormItem
+                  v-if="gptMode === 'edit' && gptEditInputSource === 'upload'"
+                  :label="t('dalle.mask')"
+                >
                   <NUpload
                     accept="image/png"
                     :max="1"
@@ -1434,9 +1771,29 @@ onUnmounted(() => {
                   </NUpload>
                 </NFormItem>
 
+                <NFormItem
+                  v-if="gptMode === 'edit' && gptEditInputSource === 'url'"
+                  :label="t('dalle.maskUrl')"
+                >
+                  <NInput
+                    v-model:value="gptMaskUrl"
+                    :placeholder="t('dalle.maskUrlPlaceholder')"
+                  />
+                </NFormItem>
+
                 <!-- Size -->
                 <NFormItem :label="t('dalle.size')">
-                  <NSelect v-model:value="formGPT.size" :options="gptSizeOptions" />
+                  <NSpace vertical style="width: 100%">
+                    <NSelect v-model:value="formGPT.size" :options="gptSizeOptions" />
+                    <NInput
+                      v-if="showGPTCustomSizeInput"
+                      v-model:value="formGPT.customSize"
+                      :placeholder="t('dalle.customSizePlaceholder')"
+                    />
+                    <div v-if="supportsFlexibleGPTSize" class="form-hint">
+                      {{ t('dalle.customSizeHint') }}
+                    </div>
+                  </NSpace>
                 </NFormItem>
 
                 <!-- Quality -->
@@ -1451,7 +1808,7 @@ onUnmounted(() => {
                 </NFormItem>
 
                 <!-- Background -->
-                <NFormItem v-if="supportsTransparency" :label="t('dalle.background')">
+                <NFormItem v-if="supportsBackground" :label="t('dalle.background')">
                   <NRadioGroup v-model:value="formGPT.background">
                     <NSpace>
                       <NRadio v-for="opt in gptBackgroundOptions" :key="opt.value" :value="opt.value">
@@ -1462,7 +1819,7 @@ onUnmounted(() => {
                 </NFormItem>
 
                 <!-- Output Format -->
-                <NFormItem v-if="supportsTransparency" :label="t('dalle.outputFormat')">
+                <NFormItem v-if="supportsOutputFormat" :label="t('dalle.outputFormat')">
                   <NRadioGroup v-model:value="formGPT.outputFormat">
                     <NSpace>
                       <NRadio v-for="opt in gptOutputFormatOptions" :key="opt.value" :value="opt.value">
@@ -1491,7 +1848,7 @@ onUnmounted(() => {
                 </NFormItem>
 
                 <!-- Moderation -->
-                <NFormItem v-if="formGPT.model === 'gpt-image-1'" :label="t('dalle.moderation')">
+                <NFormItem v-if="supportsModeration" :label="t('dalle.moderation')">
                   <NRadioGroup v-model:value="formGPT.moderation">
                     <NSpace>
                       <NRadio v-for="opt in gptModerationOptions" :key="opt.value" :value="opt.value">

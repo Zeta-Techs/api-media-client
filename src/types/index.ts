@@ -91,7 +91,11 @@ export interface GeminiVertexFormData extends BaseImageFormData {
 // GPT Image / DALL-E format
 export interface GPTImageFormData extends BaseImageFormData {
   format: 'gpt-image'
+  mode: 'generate' | 'edit'
+  editInputSource: 'upload' | 'url'
   size: string
+  sizePreset: string
+  customSize: string
   quality: string
   background: string
   outputFormat: string
@@ -99,6 +103,8 @@ export interface GPTImageFormData extends BaseImageFormData {
   n: number
   moderation: string
   referenceImages: File[]
+  referenceImageUrls: string[]
+  maskUrl: string
 }
 
 // Flux format

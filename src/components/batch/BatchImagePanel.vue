@@ -2,7 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NCard, NForm, NFormItem, NSelect, NSpace,
+  NCard, NForm, NFormItem, NSelect, NSpace, NInput, NInputNumber,
   NSlider, NTooltip, NTag
 } from 'naive-ui'
 import { useConfigStore } from '@/stores/config'
@@ -23,6 +23,17 @@ interface ImageResult {
   cloudUrl?: string
 }
 
+const GPT_IMAGE_2_SIZE_OPTIONS = [
+  { label: 'auto', value: 'auto' },
+  { label: '1024x1024 (Square)', value: '1024x1024' },
+  { label: '1536x1024 (Landscape)', value: '1536x1024' },
+  { label: '1024x1536 (Portrait)', value: '1024x1536' },
+  { label: '2048x2048 (2K Square)', value: '2048x2048' },
+  { label: '2048x1152 (2K Landscape)', value: '2048x1152' },
+  { label: '3840x2160 (4K Landscape)', value: '3840x2160' },
+  { label: '2160x3840 (4K Portrait)', value: '2160x3840' }
+]
+
 const { t } = useI18n()
 const configStore = useConfigStore()
 const historyStore = useHistoryStore()
@@ -30,33 +41,103 @@ const { uploadFile, autoUploadEnabled } = useCloudStorage()
 
 // Form settings (shared for all batch tasks)
 const batchSettings = ref({
-  model: 'gpt-image-1',
-  size: '1024x1024',
+  model: 'gpt-image-2',
+  size: 'auto',
+  customSize: '',
   quality: 'auto',
   outputFormat: 'png',
-  n: 1
+  outputCompression: 100,
+  background: 'auto',
+  moderation: 'auto'
 })
 
 // Concurrency setting
 const concurrency = ref(2)
+
+const batchSupportsOutputFormat = computed(() =>
+  batchSettings.value.model === 'gpt-image-2' || batchSettings.value.model === 'gpt-image-1'
+)
+
+const batchSupportsCompression = computed(() =>
+  batchSupportsOutputFormat.value &&
+  (batchSettings.value.outputFormat === 'jpeg' || batchSettings.value.outputFormat === 'webp')
+)
+
+const batchSupportsBackground = computed(() =>
+  batchSettings.value.model === 'gpt-image-2' || batchSettings.value.model === 'gpt-image-1'
+)
+
+const batchSupportsModeration = computed(() =>
+  batchSettings.value.model === 'gpt-image-2' || batchSettings.value.model === 'gpt-image-1'
+)
+
+const batchSupportsQuality = computed(() =>
+  batchSettings.value.model === 'gpt-image-2' ||
+  batchSettings.value.model === 'gpt-image-1' ||
+  batchSettings.value.model === 'dall-e-3'
+)
+
+const resolvedBatchSize = computed(() =>
+  batchSettings.value.size === 'custom' ? batchSettings.value.customSize.trim() : batchSettings.value.size
+)
+
+function getBatchMimeType(outputFormat: string): string {
+  if (outputFormat === 'jpeg') return 'image/jpeg'
+  if (outputFormat === 'webp') return 'image/webp'
+  return 'image/png'
+}
+
+function validateBatchCustomSize(size: string): string | null {
+  if (!size) return t('dalle.customSizeRequired')
+
+  const match = size.match(/^(\d+)x(\d+)$/i)
+  if (!match) return t('dalle.customSizeFormatHint')
+
+  const width = Number(match[1])
+  const height = Number(match[2])
+
+  if (width % 16 !== 0 || height % 16 !== 0) return t('dalle.customSizeMultipleOf16')
+  if (Math.max(width, height) > 3840) return t('dalle.customSizeMaxEdge')
+
+  const ratio = Math.max(width, height) / Math.min(width, height)
+  if (ratio > 3) return t('dalle.customSizeAspectRatio')
+
+  const totalPixels = width * height
+  if (totalPixels < 655360 || totalPixels > 8294400) return t('dalle.customSizePixelRange')
+
+  return null
+}
 
 // Image processor function
 const processImage: TaskProcessor<string, ImageResult> = async (prompt, onProgress, signal) => {
   const body: Record<string, any> = {
     model: batchSettings.value.model,
     prompt: prompt,
-    n: batchSettings.value.n
+    n: 1
   }
 
-  if (batchSettings.value.size !== 'auto') {
-    body.size = batchSettings.value.size
+  if (resolvedBatchSize.value !== 'auto') {
+    body.size = resolvedBatchSize.value
   }
 
-  if (batchSettings.value.quality !== 'auto') {
+  if (batchSupportsQuality.value) {
     body.quality = batchSettings.value.quality
   }
 
-  body.output_format = batchSettings.value.outputFormat
+  if (batchSupportsBackground.value) {
+    body.background = batchSettings.value.background
+  }
+
+  if (batchSupportsOutputFormat.value) {
+    body.output_format = batchSettings.value.outputFormat
+    if (batchSupportsCompression.value) {
+      body.output_compression = batchSettings.value.outputCompression
+    }
+  }
+
+  if (batchSupportsModeration.value) {
+    body.moderation = batchSettings.value.moderation
+  }
 
   onProgress(10) // Started
 
@@ -85,7 +166,7 @@ const processImage: TaskProcessor<string, ImageResult> = async (prompt, onProgre
     let blob: Blob | null = null
 
     if (item.b64_json) {
-      const mimeType = `image/${batchSettings.value.outputFormat}`
+      const mimeType = getBatchMimeType(batchSettings.value.outputFormat)
       blob = base64ToBlob(item.b64_json, mimeType)
       resultUrl = URL.createObjectURL(blob)
     } else if (item.url) {
@@ -112,14 +193,20 @@ const processImage: TaskProcessor<string, ImageResult> = async (prompt, onProgre
         model: batchSettings.value.model,
         customModel: '',
         format: 'gpt-image',
-        size: batchSettings.value.size,
+        mode: 'generate',
+        editInputSource: 'upload',
+        size: resolvedBatchSize.value,
+        sizePreset: batchSettings.value.size,
+        customSize: batchSettings.value.customSize,
         quality: batchSettings.value.quality,
-        background: 'auto',
+        background: batchSettings.value.background,
         outputFormat: batchSettings.value.outputFormat,
-        outputCompression: 100,
-        n: batchSettings.value.n,
-        moderation: 'auto',
-        referenceImages: []
+        outputCompression: batchSettings.value.outputCompression,
+        n: 1,
+        moderation: batchSettings.value.moderation,
+        referenceImages: [],
+        referenceImageUrls: [],
+        maskUrl: ''
       },
       result: { thumbnail: resultUrl.substring(0, 100) }
     })
@@ -174,8 +261,39 @@ watch(concurrency, (val) => {
   updateConfig({ concurrency: val })
 })
 
+watch(() => batchSettings.value.model, (model) => {
+  if (model === 'gpt-image-2') {
+    const presetValues = new Set(GPT_IMAGE_2_SIZE_OPTIONS.map(option => option.value))
+    if (!presetValues.has(batchSettings.value.size) && batchSettings.value.size !== 'custom') {
+      batchSettings.value.customSize = batchSettings.value.size
+      batchSettings.value.size = 'custom'
+    }
+  } else {
+    const sizeMap: Record<string, string> = {
+      'gpt-image-1': '1024x1024',
+      'dall-e-3': '1024x1024',
+      'dall-e-2': '1024x1024'
+    }
+    const allowedSizes: Record<string, string[]> = {
+      'gpt-image-1': ['1024x1024', '1536x1024', '1024x1536', 'auto'],
+      'dall-e-3': ['1024x1024', '1792x1024', '1024x1792'],
+      'dall-e-2': ['1024x1024', '512x512', '256x256']
+    }
+    if (!allowedSizes[model]?.includes(batchSettings.value.size)) {
+      batchSettings.value.size = sizeMap[model] || '1024x1024'
+    }
+    batchSettings.value.background = 'auto'
+    batchSettings.value.moderation = 'auto'
+    if (model !== 'gpt-image-1') {
+      batchSettings.value.outputFormat = 'png'
+      batchSettings.value.outputCompression = 100
+    }
+  }
+})
+
 // Model options
 const modelOptions = [
+  { label: 'gpt-image-2 (GPT Image 2)', value: 'gpt-image-2' },
   { label: 'gpt-image-1 (GPT Image)', value: 'gpt-image-1' },
   { label: 'dall-e-3', value: 'dall-e-3' },
   { label: 'dall-e-2', value: 'dall-e-2' }
@@ -183,6 +301,10 @@ const modelOptions = [
 
 const sizeOptions = computed(() => {
   const map: Record<string, Array<{ label: string; value: string }>> = {
+    'gpt-image-2': [
+      ...GPT_IMAGE_2_SIZE_OPTIONS,
+      { label: t('dalle.customSizeOption'), value: 'custom' }
+    ],
     'gpt-image-1': [
       { label: '1024x1024 (Square)', value: '1024x1024' },
       { label: '1536x1024 (Landscape)', value: '1536x1024' },
@@ -200,7 +322,7 @@ const sizeOptions = computed(() => {
       { label: '256x256', value: '256x256' }
     ]
   }
-  return map[batchSettings.value.model] || map['gpt-image-1']
+  return map[batchSettings.value.model] || map['gpt-image-2']
 })
 
 const qualityOptions = computed(() => [
@@ -208,6 +330,22 @@ const qualityOptions = computed(() => [
   { label: t('dalle.qualityOptions.low'), value: 'low' },
   { label: t('dalle.qualityOptions.medium'), value: 'medium' },
   { label: t('dalle.qualityOptions.high'), value: 'high' }
+])
+
+const outputFormatOptions = [
+  { label: 'PNG', value: 'png' },
+  { label: 'JPEG', value: 'jpeg' },
+  { label: 'WebP', value: 'webp' }
+]
+
+const backgroundOptions = computed(() => [
+  { label: t('dalle.backgroundOptions.auto'), value: 'auto' },
+  { label: t('dalle.backgroundOptions.opaque'), value: 'opaque' }
+])
+
+const moderationOptions = computed(() => [
+  { label: t('dalle.moderationOptions.auto'), value: 'auto' },
+  { label: t('dalle.moderationOptions.low'), value: 'low' }
 ])
 
 // Helper function
@@ -226,6 +364,13 @@ function handleAddPrompts(prompts: string[]) {
   if (!configStore.apiKey) {
     message.error(t('errors.missingApiKey'))
     return
+  }
+  if (batchSettings.value.model === 'gpt-image-2' && resolvedBatchSize.value !== 'auto') {
+    const sizeError = validateBatchCustomSize(resolvedBatchSize.value)
+    if (sizeError) {
+      message.error(sizeError)
+      return
+    }
   }
   addTasks(prompts)
   message.success(t('batch.addToQueue') + `: ${prompts.length}`)
@@ -315,17 +460,62 @@ onUnmounted(() => {
           </NFormItem>
 
           <NFormItem :label="t('dalle.size')">
+            <NSpace vertical style="width: 100%">
+              <NSelect
+                v-model:value="batchSettings.size"
+                :options="sizeOptions"
+                :disabled="isRunning"
+              />
+              <NInput
+                v-if="batchSettings.model === 'gpt-image-2' && batchSettings.size === 'custom'"
+                v-model:value="batchSettings.customSize"
+                :disabled="isRunning"
+                :placeholder="t('dalle.customSizePlaceholder')"
+              />
+              <div v-if="batchSettings.model === 'gpt-image-2'" class="setting-hint">
+                {{ t('dalle.customSizeHint') }}
+              </div>
+            </NSpace>
+          </NFormItem>
+
+          <NFormItem v-if="batchSupportsQuality" :label="t('dalle.quality')">
             <NSelect
-              v-model:value="batchSettings.size"
-              :options="sizeOptions"
+              v-model:value="batchSettings.quality"
+              :options="qualityOptions"
               :disabled="isRunning"
             />
           </NFormItem>
 
-          <NFormItem :label="t('dalle.quality')">
+          <NFormItem v-if="batchSupportsBackground" :label="t('dalle.background')">
             <NSelect
-              v-model:value="batchSettings.quality"
-              :options="qualityOptions"
+              v-model:value="batchSettings.background"
+              :options="backgroundOptions"
+              :disabled="isRunning"
+            />
+          </NFormItem>
+
+          <NFormItem v-if="batchSupportsOutputFormat" :label="t('dalle.outputFormat')">
+            <NSelect
+              v-model:value="batchSettings.outputFormat"
+              :options="outputFormatOptions"
+              :disabled="isRunning"
+            />
+          </NFormItem>
+
+          <NFormItem v-if="batchSupportsCompression" :label="t('dalle.compression')">
+            <NInputNumber
+              v-model:value="batchSettings.outputCompression"
+              :min="0"
+              :max="100"
+              :disabled="isRunning"
+              style="width: 100%"
+            />
+          </NFormItem>
+
+          <NFormItem v-if="batchSupportsModeration" :label="t('dalle.moderation')">
+            <NSelect
+              v-model:value="batchSettings.moderation"
+              :options="moderationOptions"
               :disabled="isRunning"
             />
           </NFormItem>
@@ -473,6 +663,11 @@ onUnmounted(() => {
   text-align: right;
   font-family: ui-monospace, monospace;
   font-size: 13px;
+}
+
+.setting-hint {
+  font-size: 12px;
+  opacity: 0.65;
 }
 
 .task-list-card :deep(.n-card__content) {

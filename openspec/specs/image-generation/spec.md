@@ -21,6 +21,7 @@ The system SHALL support image generation through multiple AI model providers wi
 #### Scenario: GPT-Image generation
 - **WHEN** user selects GPT-Image tab and provides a prompt
 - **THEN** system calls OpenAI-compatible /v1/images/generations endpoint
+- **AND** supports `gpt-image-2`, `gpt-image-1`, `dall-e-3`, and `dall-e-2`
 - **AND** supports multiple output images (n parameter)
 
 #### Scenario: Flux image generation
@@ -40,7 +41,7 @@ The system SHALL provide model selection for each image generation provider.
 
 #### Scenario: GPT-Image model selection
 - **WHEN** user accesses GPT-Image generation
-- **THEN** system offers models: gpt-image-1, dall-e-3, dall-e-2
+- **THEN** system offers models: gpt-image-2, gpt-image-1, dall-e-3, dall-e-2
 - **AND** allows custom model name input
 
 #### Scenario: Flux model selection
@@ -53,8 +54,10 @@ The system SHALL provide model selection for each image generation provider.
 The system SHALL allow configuration of output image dimensions and format.
 
 #### Scenario: GPT-Image size options
-- **WHEN** user selects gpt-image-1 model
-- **THEN** system offers sizes: 1024x1024, 1536x1024, 1024x1536, auto
+- **WHEN** user selects gpt-image-2 model
+- **THEN** system offers preset sizes: auto, 1024x1024, 1536x1024, 1024x1536, 2048x2048, 2048x1152, 3840x2160, 2160x3840
+- **AND** supports custom sizes that are multiples of 16, max edge 3840, max ratio 3:1, and between 655,360 and 8,294,400 total pixels
+- **AND** gpt-image-1 offers sizes: 1024x1024, 1536x1024, 1024x1536, auto
 - **AND** dall-e-3 offers: 1024x1024, 1792x1024, 1024x1792
 - **AND** dall-e-2 offers: 256x256, 512x512, 1024x1024
 
@@ -82,6 +85,7 @@ The system SHALL support reference images for guided generation and editing.
 #### Scenario: GPT-Image edit mode
 - **WHEN** user enables edit mode for GPT-Image
 - **THEN** system accepts reference images (up to 10) and optional mask image
+- **AND** supports either uploaded files or image URLs as edit inputs
 - **AND** calls /v1/images/edits endpoint
 
 #### Scenario: Flux input image
@@ -96,7 +100,9 @@ The system SHALL support advanced parameters for fine-tuning generation.
 #### Scenario: GPT-Image quality settings
 - **WHEN** user configures GPT-Image generation
 - **THEN** system offers quality options: auto, low, medium, high
-- **AND** background options: auto, transparent, opaque
+- **AND** background options vary by model
+- **AND** gpt-image-2 supports auto and opaque backgrounds only
+- **AND** gpt-image-1 supports auto, transparent, and opaque backgrounds
 - **AND** compression level for JPEG/WebP (0-100)
 - **AND** moderation level: auto, low
 
@@ -137,6 +143,11 @@ The system SHALL display generated images and allow download.
 - **AND** each image has individual download option
 - **AND** clicking opens lightbox view
 
+#### Scenario: Batch GPT-Image result
+- **WHEN** user runs batch GPT-Image generation
+- **THEN** each prompt produces exactly one result image
+- **AND** batch export uses the selected output format extension
+
 #### Scenario: Revised prompt display
 - **WHEN** GPT-Image returns revised_prompt
 - **THEN** system displays the revised prompt in an info alert
@@ -172,4 +183,3 @@ The system SHALL record completed generations to history.
 - **WHEN** image generation completes successfully
 - **THEN** system adds entry to history store with type 'image'
 - **AND** includes all form parameters and thumbnail reference
-
