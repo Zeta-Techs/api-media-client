@@ -483,6 +483,32 @@ function updateGPTCustomSizeDimensions(width: number | null, height: number | nu
   formGPT.value.customSize = `${Math.round(width)}x${Math.round(height)}`
 }
 
+function getGPTImage2SizeValidationErrorFromDimensions(
+  dimensions: GPTCustomSizeDimensions
+): string | null {
+  const { width, height } = dimensions
+
+  if (width % GPT_IMAGE_2_STEP !== 0 || height % GPT_IMAGE_2_STEP !== 0) {
+    return t('dalle.customSizeMultipleOf16')
+  }
+
+  if (Math.max(width, height) > GPT_IMAGE_2_MAX_EDGE) {
+    return t('dalle.customSizeMaxEdge')
+  }
+
+  const ratio = Math.max(width, height) / Math.min(width, height)
+  if (ratio > GPT_IMAGE_2_MAX_RATIO) {
+    return t('dalle.customSizeAspectRatio')
+  }
+
+  const totalPixels = width * height
+  if (totalPixels < GPT_IMAGE_2_MIN_PIXELS || totalPixels > GPT_IMAGE_2_MAX_PIXELS) {
+    return t('dalle.customSizePixelRange')
+  }
+
+  return null
+}
+
 function alignGPTCustomSizeToStep(value: number): number {
   return Math.max(GPT_IMAGE_2_STEP, Math.round(value / GPT_IMAGE_2_STEP) * GPT_IMAGE_2_STEP)
 }
@@ -503,6 +529,31 @@ function swapGPTCustomSizeDimensions() {
     parsedGPTCustomSize.value.height,
     parsedGPTCustomSize.value.width
   )
+}
+
+function handleGPTCustomSizeWheel(
+  dimension: keyof GPTCustomSizeDimensions,
+  event: WheelEvent
+) {
+  const currentDimensions = parsedGPTCustomSize.value
+  if (!currentDimensions) return
+
+  const stepDirection = event.deltaY < 0 ? 1 : event.deltaY > 0 ? -1 : 0
+  if (stepDirection === 0) return
+
+  const nextValue = currentDimensions[dimension] + stepDirection * GPT_IMAGE_2_STEP
+  if (nextValue < GPT_IMAGE_2_STEP) return
+
+  const nextDimensions: GPTCustomSizeDimensions = {
+    ...currentDimensions,
+    [dimension]: nextValue
+  }
+
+  if (getGPTImage2SizeValidationErrorFromDimensions(nextDimensions) !== null) {
+    return
+  }
+
+  updateGPTCustomSizeDimensions(nextDimensions.width, nextDimensions.height)
 }
 
 function isPresetGPTSize(size: string): boolean {
@@ -542,27 +593,7 @@ function validateGPTImage2Size(size: string): string | null {
   const dims = parseGPTCustomSize(size)
   if (!dims) return t('dalle.customSizeFormatHint')
 
-  const { width, height } = dims
-
-  if (width % GPT_IMAGE_2_STEP !== 0 || height % GPT_IMAGE_2_STEP !== 0) {
-    return t('dalle.customSizeMultipleOf16')
-  }
-
-  if (Math.max(width, height) > GPT_IMAGE_2_MAX_EDGE) {
-    return t('dalle.customSizeMaxEdge')
-  }
-
-  const ratio = Math.max(width, height) / Math.min(width, height)
-  if (ratio > GPT_IMAGE_2_MAX_RATIO) {
-    return t('dalle.customSizeAspectRatio')
-  }
-
-  const totalPixels = width * height
-  if (totalPixels < GPT_IMAGE_2_MIN_PIXELS || totalPixels > GPT_IMAGE_2_MAX_PIXELS) {
-    return t('dalle.customSizePixelRange')
-  }
-
-  return null
+  return getGPTImage2SizeValidationErrorFromDimensions(dims)
 }
 
 function validateGPTRequest(): string | null {
@@ -1960,7 +1991,10 @@ onUnmounted(() => {
                       </div>
 
                       <div class="custom-size-editor-grid">
-                        <div class="custom-size-number-group">
+                        <div
+                          class="custom-size-number-group"
+                          @wheel.capture.prevent.stop="handleGPTCustomSizeWheel('width', $event)"
+                        >
                           <span class="custom-size-number-label">{{ t('dalle.customWidth') }}</span>
                           <NInputNumber
                             v-model:value="gptCustomSizeWidth"
@@ -1969,7 +2003,10 @@ onUnmounted(() => {
                             :step="GPT_IMAGE_2_STEP"
                           />
                         </div>
-                        <div class="custom-size-number-group">
+                        <div
+                          class="custom-size-number-group"
+                          @wheel.capture.prevent.stop="handleGPTCustomSizeWheel('height', $event)"
+                        >
                           <span class="custom-size-number-label">{{ t('dalle.customHeight') }}</span>
                           <NInputNumber
                             v-model:value="gptCustomSizeHeight"
