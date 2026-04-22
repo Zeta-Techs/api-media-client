@@ -17,3 +17,9 @@
 ## 5. Validation
 - [ ] 5.1 Run OpenSpec validation if CLI is available. Blocked: `openspec` CLI is not available in PATH.
 - [x] 5.2 Run `npm run build`.
+
+## 6. GPT-Image API Compatibility Fixes
+- [x] 6.1 Omit default `auto`, default `png`, and `n=1` parameters from GPT-Image requests.
+- [x] 6.2 Convert the first uploaded edit reference image to PNG whenever a mask is submitted.
+- [x] 6.3 Validate uploaded mask dimensions against the first reference image before submitting.
+- [x] 6.4 Treat empty image API responses as errors instead of completed generations.

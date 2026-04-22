@@ -334,7 +334,10 @@
       "fallbackHint": "如果没有绘制可视化蒙版，将使用这里上传的 PNG 蒙版。",
       "fallbackActive": "当前将使用手动上传的蒙版；一旦绘制可视化蒙版，将优先使用绘制结果。",
       "emptyMaskWarning": "请先绘制蒙版区域后再下载。",
-      "loadFailed": "参考图载入失败，无法初始化蒙版编辑器"
+      "loadFailed": "参考图载入失败，无法初始化蒙版编辑器",
+      "referenceLoadFailed": "图片载入失败，无法准备编辑请求",
+      "referenceConvertFailed": "参考图转换为 PNG 失败，无法提交编辑请求",
+      "maskSizeMismatch": "蒙版尺寸必须与第一张参考图完全一致，请重新绘制或上传匹配尺寸的蒙版"
     },
     "editInputSource": "编辑输入",
     "editInputSources": {
@@ -378,6 +381,7 @@
     "result": "结果",
     "revisedPrompt": "优化后的提示词",
     "imageReady": "图片生成成功",
+    "emptyResponse": "接口没有返回可用图片，请检查模型、参数或服务端兼容性",
     "waitingForPrompt": "输入提示词后点击生成...",
     "qualityOptions": {
       "auto": "自动",

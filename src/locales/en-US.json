@@ -335,7 +335,10 @@
       "fallbackHint": "If no visual mask is drawn, the uploaded PNG mask will be used.",
       "fallbackActive": "The uploaded mask will be used unless you draw a visual mask, which takes priority.",
       "emptyMaskWarning": "Draw a mask area before downloading.",
-      "loadFailed": "Failed to load the reference image, so the mask editor could not initialize"
+      "loadFailed": "Failed to load the reference image, so the mask editor could not initialize",
+      "referenceLoadFailed": "Failed to load the image, so the edit request could not be prepared",
+      "referenceConvertFailed": "Failed to convert the reference image to PNG, so the edit request could not be submitted",
+      "maskSizeMismatch": "Mask dimensions must exactly match the first reference image. Redraw or upload a matching mask."
     },
     "editInputSource": "Edit Input",
     "editInputSources": {
@@ -379,6 +382,7 @@
     "result": "Result",
     "revisedPrompt": "Revised Prompt",
     "imageReady": "Image generated successfully",
+    "emptyResponse": "The API did not return a usable image. Check the model, parameters, or server compatibility.",
     "waitingForPrompt": "Enter a prompt and click generate...",
     "qualityOptions": {
       "auto": "Auto",

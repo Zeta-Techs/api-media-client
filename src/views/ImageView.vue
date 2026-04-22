@@ -684,7 +684,7 @@ function appendGPTImageOptions(
     }
   }
 
-  if (options.includeMultiple && supportsMultiple.value) {
+  if (options.includeMultiple && supportsMultiple.value && formGPT.value.n > 1) {
     setValue('n', formGPT.value.n)
   }
 
@@ -692,22 +692,25 @@ function appendGPTImageOptions(
     setValue('size', resolvedGPTSize.value)
   }
 
-  if (supportsQuality.value) {
+  if (supportsQuality.value && formGPT.value.quality !== 'auto') {
     setValue('quality', formGPT.value.quality)
   }
 
-  if (supportsBackground.value) {
+  if (supportsBackground.value && formGPT.value.background !== 'auto') {
     setValue('background', formGPT.value.background)
   }
 
-  if (supportsOutputFormat.value) {
+  if (
+    supportsOutputFormat.value &&
+    (formGPT.value.outputFormat === 'jpeg' || formGPT.value.outputFormat === 'webp')
+  ) {
     setValue('output_format', formGPT.value.outputFormat)
     if (supportsCompression.value) {
       setValue('output_compression', formGPT.value.outputCompression)
     }
   }
 
-  if (supportsModeration.value) {
+  if (supportsModeration.value && formGPT.value.moderation !== 'auto') {
     setValue('moderation', formGPT.value.moderation)
   }
 }
@@ -1337,6 +1340,71 @@ function handleGPTMaskWheel(event: WheelEvent) {
   adjustGPTMaskZoom(event.deltaY < 0 ? 1.08 : 1 / 1.08)
 }
 
+function getPNGFileName(file: File): string {
+  const baseName = file.name.replace(/\.[^.]+$/, '') || 'reference-image'
+  return `${baseName}.png`
+}
+
+function getImageDimensionsFromFile(file: File): Promise<GPTMaskCanvasDimensions> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const image = new Image()
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight
+      })
+    }
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error(t('dalle.maskEditor.referenceLoadFailed')))
+    }
+
+    image.src = objectUrl
+  })
+}
+
+function convertImageFileToPNG(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const image = new Image()
+
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.naturalWidth
+      canvas.height = image.naturalHeight
+
+      const context = canvas.getContext('2d')
+      if (!context) {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error(t('dalle.maskEditor.referenceConvertFailed')))
+        return
+      }
+
+      context.drawImage(image, 0, 0)
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl)
+        if (!blob) {
+          reject(new Error(t('dalle.maskEditor.referenceConvertFailed')))
+          return
+        }
+
+        resolve(new File([blob], getPNGFileName(file), { type: 'image/png' }))
+      }, 'image/png')
+    }
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error(t('dalle.maskEditor.referenceLoadFailed')))
+    }
+
+    image.src = objectUrl
+  })
+}
+
 async function exportGPTMaskFile(): Promise<File | null> {
   const sourceCanvas = gptMaskDrawingCanvas.value
   const sourceContext = sourceCanvas?.getContext('2d')
@@ -1401,6 +1469,65 @@ async function resolveGPTMaskImageForSubmit(): Promise<File | null> {
   return gptMaskImage.value
 }
 
+async function prepareGPTEditUploadPayload(): Promise<{ images: File[]; mask: File | null }> {
+  const referenceImages = [...gptReferenceImages.value]
+  const maskImage = await resolveGPTMaskImageForSubmit()
+
+  if (!maskImage || referenceImages.length === 0) {
+    return {
+      images: referenceImages,
+      mask: null
+    }
+  }
+
+  const primaryReferenceImage = referenceImages[0]
+  const [primaryDimensions, maskDimensions] = await Promise.all([
+    getImageDimensionsFromFile(primaryReferenceImage),
+    getImageDimensionsFromFile(maskImage)
+  ])
+
+  if (
+    primaryDimensions.width !== maskDimensions.width ||
+    primaryDimensions.height !== maskDimensions.height
+  ) {
+    throw new Error(t('dalle.maskEditor.maskSizeMismatch'))
+  }
+
+  const pngPrimaryReferenceImage = await convertImageFileToPNG(primaryReferenceImage)
+
+  return {
+    images: [pngPrimaryReferenceImage, ...referenceImages.slice(1)],
+    mask: maskImage
+  }
+}
+
+function extractGPTImageUrlsFromResponse(response: any): string[] {
+  const items = Array.isArray(response?.data) ? response.data : []
+  const urls: string[] = []
+
+  for (const item of items) {
+    if (item.b64_json) {
+      const mimeType = item.output_format
+        ? getMimeTypeFromOutputFormat(item.output_format)
+        : getMimeTypeFromOutputFormat(formGPT.value.outputFormat)
+      const blob = base64ToBlob(item.b64_json, mimeType)
+      urls.push(URL.createObjectURL(blob))
+    } else if (item.url) {
+      urls.push(item.url)
+    }
+
+    if (item.revised_prompt) {
+      gptRevisedPrompt.value = item.revised_prompt
+    }
+  }
+
+  if (urls.length === 0) {
+    throw new Error(t('dalle.emptyResponse'))
+  }
+
+  return urls
+}
+
 // ==================== GPT-Image Submit ====================
 async function handleSubmitGPT() {
   if (!configStore.apiKey) {
@@ -1443,13 +1570,13 @@ async function handleSubmitGPT() {
         fd.set('model', actualGPTModel.value)
         fd.set('prompt', formGPT.value.prompt)
 
-        gptReferenceImages.value.forEach((file) => {
+        const uploadPayload = await prepareGPTEditUploadPayload()
+        uploadPayload.images.forEach((file) => {
           fd.append('image[]', file, file.name)
         })
 
-        const maskImage = await resolveGPTMaskImageForSubmit()
-        if (maskImage) {
-          fd.set('mask', maskImage, maskImage.name)
+        if (uploadPayload.mask) {
+          fd.set('mask', uploadPayload.mask, uploadPayload.mask.name)
         }
 
         appendGPTImageOptions(fd)
@@ -1517,25 +1644,9 @@ async function handleSubmitGPT() {
       response = JSON.parse(text)
     }
 
-    if (response.data) {
-      const urls: string[] = []
-      for (const item of response.data) {
-        if (item.b64_json) {
-          const mimeType = getMimeTypeFromOutputFormat(formGPT.value.outputFormat)
-          const blob = base64ToBlob(item.b64_json, mimeType)
-          urls.push(URL.createObjectURL(blob))
-        } else if (item.url) {
-          urls.push(item.url)
-        }
-        if (item.revised_prompt) {
-          gptRevisedPrompt.value = item.revised_prompt
-        }
-      }
-      gptImageUrls.value = urls
-      if (urls.length > 0) {
-        imageUrl.value = urls[0]
-      }
-    }
+    const urls = extractGPTImageUrlsFromResponse(response)
+    gptImageUrls.value = urls
+    imageUrl.value = urls[0]
 
     const gptParams: GPTImageFormData = {
       prompt: formGPT.value.prompt,
