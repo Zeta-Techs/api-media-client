@@ -319,6 +319,21 @@
     "customSizeOption": "Custom Size",
     "customSizePlaceholder": "e.g. 2048x1152",
     "customSizeHint": "For gpt-image-2, custom sizes must be multiples of 16, max edge 3840, max ratio 3:1, and between 655,360 and 8,294,400 pixels.",
+    "customSizeEditor": "Custom size editor",
+    "customWidth": "Width",
+    "customHeight": "Height",
+    "swapDimensions": "Swap",
+    "snapTo16": "Snap to 16",
+    "customSizeMetrics": {
+      "ratio": "Aspect ratio",
+      "pixels": "Total pixels"
+    },
+    "customSizeConstraints": {
+      "multipleOf16": "Both edges must be multiples of 16",
+      "maxEdge": "Longest edge must be 3840px or less",
+      "aspectRatio": "Long edge to short edge ratio must be 3:1 or less",
+      "pixelRange": "Total pixels must stay within the supported range"
+    },
     "customSizeRequired": "Enter a custom image size before submitting",
     "customSizeFormatHint": "Custom size must use the format WIDTHxHEIGHT, for example 2048x1152",
     "customSizeMultipleOf16": "Custom size width and height must both be multiples of 16",

@@ -318,6 +318,21 @@
     "customSizeOption": "自定义尺寸",
     "customSizePlaceholder": "例如 2048x1152",
     "customSizeHint": "gpt-image-2 的自定义尺寸要求宽高均为 16 的倍数，最长边不超过 3840，长宽比不超过 3:1，总像素在 655,360 到 8,294,400 之间。",
+    "customSizeEditor": "自定义尺寸编辑器",
+    "customWidth": "宽度",
+    "customHeight": "高度",
+    "swapDimensions": "交换",
+    "snapTo16": "对齐到 16",
+    "customSizeMetrics": {
+      "ratio": "宽高比",
+      "pixels": "总像素"
+    },
+    "customSizeConstraints": {
+      "multipleOf16": "宽高都必须是 16 的倍数",
+      "maxEdge": "最长边必须不超过 3840px",
+      "aspectRatio": "长边与短边的比例必须不超过 3:1",
+      "pixelRange": "总像素必须落在支持范围内"
+    },
     "customSizeRequired": "请输入自定义尺寸后再提交",
     "customSizeFormatHint": "自定义尺寸必须使用 宽x高 格式，例如 2048x1152",
     "customSizeMultipleOf16": "自定义尺寸的宽和高都必须是 16 的倍数",

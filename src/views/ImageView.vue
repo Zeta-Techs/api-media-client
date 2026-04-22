@@ -53,6 +53,17 @@ interface GPTModelCapabilities {
   defaultSize: string
 }
 
+interface GPTCustomSizeDimensions {
+  width: number
+  height: number
+}
+
+const GPT_IMAGE_2_MIN_PIXELS = 655360
+const GPT_IMAGE_2_MAX_PIXELS = 8294400
+const GPT_IMAGE_2_MAX_EDGE = 3840
+const GPT_IMAGE_2_STEP = 16
+const GPT_IMAGE_2_MAX_RATIO = 3
+
 const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: 'auto', value: 'auto' },
   { label: '1024x1024 (Square)', value: '1024x1024' },
@@ -366,6 +377,76 @@ const showGPTCustomSizeInput = computed(() =>
 const resolvedGPTSize = computed(() =>
   formGPT.value.size === 'custom' ? formGPT.value.customSize.trim() : formGPT.value.size
 )
+const parsedGPTCustomSize = computed<GPTCustomSizeDimensions | null>(() =>
+  parseGPTCustomSize(formGPT.value.customSize)
+)
+const gptCustomSizeWidth = computed<number | null>({
+  get: () => parsedGPTCustomSize.value?.width ?? null,
+  set: (value) => {
+    updateGPTCustomSizeDimensions(value, parsedGPTCustomSize.value?.height ?? null)
+  }
+})
+const gptCustomSizeHeight = computed<number | null>({
+  get: () => parsedGPTCustomSize.value?.height ?? null,
+  set: (value) => {
+    updateGPTCustomSizeDimensions(parsedGPTCustomSize.value?.width ?? null, value)
+  }
+})
+const gptCustomSizePixels = computed(() =>
+  parsedGPTCustomSize.value ? parsedGPTCustomSize.value.width * parsedGPTCustomSize.value.height : null
+)
+const gptCustomSizeRatio = computed(() => {
+  if (!parsedGPTCustomSize.value) return null
+  const { width, height } = parsedGPTCustomSize.value
+  return Math.max(width, height) / Math.min(width, height)
+})
+const gptCustomSizeConstraintItems = computed(() => {
+  const dims = parsedGPTCustomSize.value
+  const pixels = gptCustomSizePixels.value
+  const ratio = gptCustomSizeRatio.value
+
+  return [
+    {
+      key: 'multiple',
+      label: t('dalle.customSizeConstraints.multipleOf16'),
+      value: dims ? `${dims.width} × ${dims.height}` : '—',
+      passed: Boolean(dims && dims.width % GPT_IMAGE_2_STEP === 0 && dims.height % GPT_IMAGE_2_STEP === 0)
+    },
+    {
+      key: 'edge',
+      label: t('dalle.customSizeConstraints.maxEdge'),
+      value: dims ? `${Math.max(dims.width, dims.height)} / ${GPT_IMAGE_2_MAX_EDGE}px` : '—',
+      passed: Boolean(dims && Math.max(dims.width, dims.height) <= GPT_IMAGE_2_MAX_EDGE)
+    },
+    {
+      key: 'ratio',
+      label: t('dalle.customSizeConstraints.aspectRatio'),
+      value: ratio ? `${ratio.toFixed(2)} : 1` : '—',
+      passed: Boolean(ratio && ratio <= GPT_IMAGE_2_MAX_RATIO)
+    },
+    {
+      key: 'pixels',
+      label: t('dalle.customSizeConstraints.pixelRange'),
+      value: pixels ? `${pixels.toLocaleString()}` : '—',
+      passed: Boolean(
+        pixels &&
+        pixels >= GPT_IMAGE_2_MIN_PIXELS &&
+        pixels <= GPT_IMAGE_2_MAX_PIXELS
+      )
+    }
+  ]
+})
+const gptCustomSizePreviewStyle = computed(() => {
+  const dims = parsedGPTCustomSize.value
+  if (!dims) return {}
+
+  const isLandscape = dims.width >= dims.height
+  return {
+    aspectRatio: `${dims.width} / ${dims.height}`,
+    width: isLandscape ? '100%' : 'auto',
+    height: isLandscape ? 'auto' : '100%'
+  }
+})
 const gptReferenceImageUrlsText = computed({
   get: () => gptReferenceImageUrls.value.join('\n'),
   set: (value: string) => {
@@ -381,6 +462,47 @@ function getMimeTypeFromOutputFormat(outputFormat: string): string {
   if (outputFormat === 'jpeg') return 'image/jpeg'
   if (outputFormat === 'webp') return 'image/webp'
   return 'image/png'
+}
+
+function parseGPTCustomSize(size: string): GPTCustomSizeDimensions | null {
+  const match = size.trim().match(/^(\d+)x(\d+)$/i)
+  if (!match) return null
+
+  return {
+    width: Number(match[1]),
+    height: Number(match[2])
+  }
+}
+
+function updateGPTCustomSizeDimensions(width: number | null, height: number | null) {
+  if (!width || !height) {
+    formGPT.value.customSize = ''
+    return
+  }
+
+  formGPT.value.customSize = `${Math.round(width)}x${Math.round(height)}`
+}
+
+function alignGPTCustomSizeToStep(value: number): number {
+  return Math.max(GPT_IMAGE_2_STEP, Math.round(value / GPT_IMAGE_2_STEP) * GPT_IMAGE_2_STEP)
+}
+
+function snapGPTCustomSizeToStep() {
+  if (!parsedGPTCustomSize.value) return
+
+  updateGPTCustomSizeDimensions(
+    alignGPTCustomSizeToStep(parsedGPTCustomSize.value.width),
+    alignGPTCustomSizeToStep(parsedGPTCustomSize.value.height)
+  )
+}
+
+function swapGPTCustomSizeDimensions() {
+  if (!parsedGPTCustomSize.value) return
+
+  updateGPTCustomSizeDimensions(
+    parsedGPTCustomSize.value.height,
+    parsedGPTCustomSize.value.width
+  )
 }
 
 function isPresetGPTSize(size: string): boolean {
@@ -417,27 +539,26 @@ function normalizeGPTSizeForModel(model: string) {
 function validateGPTImage2Size(size: string): string | null {
   if (!size) return t('dalle.customSizeRequired')
 
-  const match = size.match(/^(\d+)x(\d+)$/i)
-  if (!match) return t('dalle.customSizeFormatHint')
+  const dims = parseGPTCustomSize(size)
+  if (!dims) return t('dalle.customSizeFormatHint')
 
-  const width = Number(match[1])
-  const height = Number(match[2])
+  const { width, height } = dims
 
-  if (width % 16 !== 0 || height % 16 !== 0) {
+  if (width % GPT_IMAGE_2_STEP !== 0 || height % GPT_IMAGE_2_STEP !== 0) {
     return t('dalle.customSizeMultipleOf16')
   }
 
-  if (Math.max(width, height) > 3840) {
+  if (Math.max(width, height) > GPT_IMAGE_2_MAX_EDGE) {
     return t('dalle.customSizeMaxEdge')
   }
 
   const ratio = Math.max(width, height) / Math.min(width, height)
-  if (ratio > 3) {
+  if (ratio > GPT_IMAGE_2_MAX_RATIO) {
     return t('dalle.customSizeAspectRatio')
   }
 
   const totalPixels = width * height
-  if (totalPixels < 655360 || totalPixels > 8294400) {
+  if (totalPixels < GPT_IMAGE_2_MIN_PIXELS || totalPixels > GPT_IMAGE_2_MAX_PIXELS) {
     return t('dalle.customSizePixelRange')
   }
 
@@ -526,6 +647,16 @@ watch(() => formGPT.value.model, (newModel) => {
   }
 
   saveGPTSettings()
+})
+
+watch(() => formGPT.value.size, (newSize, oldSize) => {
+  if (
+    newSize === 'custom' &&
+    oldSize !== 'custom' &&
+    !parsedGPTCustomSize.value
+  ) {
+    formGPT.value.customSize = '1024x1024'
+  }
 })
 
 watch(gptEditInputSource, (source) => {
@@ -1815,11 +1946,85 @@ onUnmounted(() => {
                 <NFormItem :label="t('dalle.size')">
                   <NSpace vertical style="width: 100%">
                     <NSelect v-model:value="formGPT.size" :options="gptSizeOptions" />
-                    <NInput
-                      v-if="showGPTCustomSizeInput"
-                      v-model:value="formGPT.customSize"
-                      :placeholder="t('dalle.customSizePlaceholder')"
-                    />
+                    <div v-if="showGPTCustomSizeInput" class="custom-size-editor">
+                      <div class="custom-size-editor-header">
+                        <span class="custom-size-editor-title">{{ t('dalle.customSizeEditor') }}</span>
+                        <div class="custom-size-editor-actions">
+                          <NButton size="small" quaternary @click="swapGPTCustomSizeDimensions">
+                            {{ t('dalle.swapDimensions') }}
+                          </NButton>
+                          <NButton size="small" quaternary @click="snapGPTCustomSizeToStep">
+                            {{ t('dalle.snapTo16') }}
+                          </NButton>
+                        </div>
+                      </div>
+
+                      <div class="custom-size-editor-grid">
+                        <div class="custom-size-number-group">
+                          <span class="custom-size-number-label">{{ t('dalle.customWidth') }}</span>
+                          <NInputNumber
+                            v-model:value="gptCustomSizeWidth"
+                            :min="GPT_IMAGE_2_STEP"
+                            :max="GPT_IMAGE_2_MAX_EDGE"
+                            :step="GPT_IMAGE_2_STEP"
+                          />
+                        </div>
+                        <div class="custom-size-number-group">
+                          <span class="custom-size-number-label">{{ t('dalle.customHeight') }}</span>
+                          <NInputNumber
+                            v-model:value="gptCustomSizeHeight"
+                            :min="GPT_IMAGE_2_STEP"
+                            :max="GPT_IMAGE_2_MAX_EDGE"
+                            :step="GPT_IMAGE_2_STEP"
+                          />
+                        </div>
+                      </div>
+
+                      <NInput
+                        v-model:value="formGPT.customSize"
+                        :placeholder="t('dalle.customSizePlaceholder')"
+                      />
+
+                      <div class="custom-size-visual-card">
+                        <div class="custom-size-visual-frame">
+                          <div
+                            v-if="parsedGPTCustomSize"
+                            class="custom-size-visual-box"
+                            :style="gptCustomSizePreviewStyle"
+                          >
+                            <span>{{ parsedGPTCustomSize.width }} × {{ parsedGPTCustomSize.height }}</span>
+                          </div>
+                        </div>
+
+                        <div class="custom-size-sidebar">
+                          <div class="custom-size-metrics">
+                            <div class="custom-size-metric">
+                              <span class="custom-size-metric-label">{{ t('dalle.customSizeMetrics.ratio') }}</span>
+                              <strong>{{ gptCustomSizeRatio ? `${gptCustomSizeRatio.toFixed(2)} : 1` : '—' }}</strong>
+                            </div>
+                            <div class="custom-size-metric">
+                              <span class="custom-size-metric-label">{{ t('dalle.customSizeMetrics.pixels') }}</span>
+                              <strong>{{ gptCustomSizePixels ? gptCustomSizePixels.toLocaleString() : '—' }}</strong>
+                            </div>
+                          </div>
+
+                          <div class="custom-size-rules">
+                            <div
+                              v-for="item in gptCustomSizeConstraintItems"
+                              :key="item.key"
+                              class="custom-size-rule"
+                              :class="{ 'is-valid': item.passed, 'is-invalid': !item.passed }"
+                            >
+                              <div class="custom-size-rule-main">
+                                <span class="custom-size-rule-dot" />
+                                <span>{{ item.label }}</span>
+                              </div>
+                              <span class="custom-size-rule-value">{{ item.value }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div v-if="supportsFlexibleGPTSize" class="form-hint">
                       {{ t('dalle.customSizeHint') }}
                     </div>
@@ -2341,6 +2546,168 @@ onUnmounted(() => {
   opacity: 0.6;
 }
 
+.custom-size-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.custom-size-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.custom-size-editor-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.custom-size-editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.custom-size-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.custom-size-number-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-size-number-group :deep(.n-input-number) {
+  width: 100%;
+}
+
+.custom-size-number-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.custom-size-visual-card {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.custom-size-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.custom-size-visual-frame {
+  height: 180px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(18, 26, 44, 0.9), rgba(13, 19, 33, 0.95));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-size-visual-box {
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.55);
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(167, 139, 250, 0.16));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(34, 211, 238, 0.12);
+}
+
+.custom-size-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.custom-size-metric {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.custom-size-metric strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.custom-size-metric-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.custom-size-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-size-rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.custom-size-rule-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.custom-size-rule-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: rgba(250, 204, 21, 0.9);
+}
+
+.custom-size-rule.is-valid .custom-size-rule-dot {
+  background: #4ade80;
+}
+
+.custom-size-rule.is-invalid .custom-size-rule-dot {
+  background: #f59e0b;
+}
+
+.custom-size-rule-value {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
 /* GPT-Image multi-image grid */
 .images-grid {
   display: grid;
@@ -2479,6 +2846,20 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .custom-size-editor-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .custom-size-visual-card {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-size-editor-grid,
+  .custom-size-metrics {
+    grid-template-columns: 1fr;
+  }
+
   .preview-card-header {
     flex-direction: column;
     align-items: flex-start;
