@@ -70,6 +70,13 @@ interface GPTMaskPoint {
 
 type GPTMaskTool = 'brush' | 'eraser' | 'pan'
 
+interface GPTImageResponseItem {
+  b64_json?: string
+  url?: string
+  revised_prompt?: string
+  output_format?: string
+}
+
 const GPT_IMAGE_2_MIN_PIXELS = 655360
 const GPT_IMAGE_2_MAX_PIXELS = 8294400
 const GPT_IMAGE_2_MAX_EDGE = 3840
@@ -78,6 +85,7 @@ const GPT_IMAGE_2_MAX_RATIO = 3
 const GPT_MASK_HISTORY_LIMIT = 40
 const GPT_MASK_MIN_ZOOM = 0.08
 const GPT_MASK_MAX_ZOOM = 8
+const GPT_IMAGE_REQUEST_TIMEOUT_MS = 240000
 
 const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: 'auto', value: 'auto' },
@@ -1501,6 +1509,219 @@ async function prepareGPTEditUploadPayload(): Promise<{ images: File[]; mask: Fi
   }
 }
 
+function getSafeGPTEndpoint(url: string) {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname}`
+  } catch {
+    return url.replace(/\?.*$/, '')
+  }
+}
+
+function isGPTFetchNetworkError(error: unknown) {
+  if (error instanceof TypeError) return true
+
+  const message = error instanceof Error ? error.message : String(error)
+  return /failed to fetch|networkerror|load failed|network request failed/i.test(message)
+}
+
+function createGPTNetworkError(error: unknown, url: string, startedAt: number) {
+  const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+  const originalMessage = error instanceof Error ? error.message : String(error)
+
+  return new Error(t('dalle.networkFailure', {
+    seconds: elapsedSeconds,
+    endpoint: getSafeGPTEndpoint(url),
+    message: originalMessage || t('errors.networkError')
+  }))
+}
+
+function isGPTImageStreamUnsupportedError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    /stream|partial_images/i.test(message) &&
+    /unsupported|not supported|unknown|unrecognized|invalid|unexpected/i.test(message)
+  )
+}
+
+function getGPTImageItemsFromStreamPayload(payload: any): GPTImageResponseItem[] {
+  if (!payload) return []
+
+  if (Array.isArray(payload.data)) {
+    return payload.data.filter((item: any) => item?.b64_json || item?.url)
+  }
+
+  if (payload.b64_json || payload.url) {
+    return [payload]
+  }
+
+  if (payload.image?.b64_json || payload.image?.url) {
+    return [payload.image]
+  }
+
+  return []
+}
+
+function parseGPTImageStreamBlock(block: string) {
+  const lines = block.split(/\n/)
+  const dataLines: string[] = []
+  let eventName = ''
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart())
+    }
+  }
+
+  if (dataLines.length === 0) return null
+
+  const data = dataLines.join('\n').trim()
+  if (!data || data === '[DONE]') return null
+
+  try {
+    return {
+      eventName,
+      data: JSON.parse(data)
+    }
+  } catch {
+    return null
+  }
+}
+
+function consumeGPTImageStreamBuffer(
+  buffer: string,
+  flush: boolean,
+  onBlock: (block: string) => void
+) {
+  let remaining = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  let separatorIndex = remaining.indexOf('\n\n')
+
+  while (separatorIndex !== -1) {
+    const block = remaining.slice(0, separatorIndex).trim()
+    if (block) onBlock(block)
+    remaining = remaining.slice(separatorIndex + 2)
+    separatorIndex = remaining.indexOf('\n\n')
+  }
+
+  if (flush && remaining.trim()) {
+    onBlock(remaining.trim())
+    return ''
+  }
+
+  return remaining
+}
+
+async function parseGPTImageStreamResponse(res: Response): Promise<{ data: GPTImageResponseItem[] }> {
+  const completedItems: GPTImageResponseItem[] = []
+  const partialItems: GPTImageResponseItem[] = []
+
+  const handleStreamBlock = (block: string) => {
+    const event = parseGPTImageStreamBlock(block)
+    if (!event) return
+
+    const eventType = String(event.data?.type || event.eventName || '')
+    if (eventType === 'error' || event.data?.error) {
+      const message = event.data?.error?.message || event.data?.message || t('errors.networkError')
+      throw new Error(message)
+    }
+
+    const items = getGPTImageItemsFromStreamPayload(event.data)
+    if (items.length === 0) return
+
+    if (eventType.includes('partial_image')) {
+      partialItems.splice(0, partialItems.length, ...items)
+    } else {
+      completedItems.push(...items)
+    }
+  }
+
+  if (!res.body) {
+    const text = await res.text()
+    consumeGPTImageStreamBuffer(text, true, handleStreamBlock)
+    return { data: completedItems.length > 0 ? completedItems : partialItems }
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    buffer = consumeGPTImageStreamBuffer(buffer, false, handleStreamBlock)
+  }
+
+  buffer += decoder.decode()
+  consumeGPTImageStreamBuffer(buffer, true, handleStreamBlock)
+
+  return { data: completedItems.length > 0 ? completedItems : partialItems }
+}
+
+async function requestGPTImageJSON(
+  url: string,
+  init: RequestInit,
+  sourceSignal: AbortSignal
+): Promise<any> {
+  const startedAt = Date.now()
+  const requestController = new AbortController()
+  let didTimeout = false
+
+  const abortFromSource = () => requestController.abort()
+  if (sourceSignal.aborted) {
+    requestController.abort()
+  } else {
+    sourceSignal.addEventListener('abort', abortFromSource, { once: true })
+  }
+
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true
+    requestController.abort()
+  }, GPT_IMAGE_REQUEST_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: requestController.signal
+    })
+
+    const contentType = res.headers.get('content-type') || ''
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw parseApiError(text, res.status)
+    }
+
+    if (contentType.includes('text/event-stream')) {
+      return await parseGPTImageStreamResponse(res)
+    }
+
+    const text = await res.text()
+    return JSON.parse(text)
+  } catch (error) {
+    if (didTimeout) {
+      throw new Error(t('dalle.requestTimeout', {
+        seconds: Math.round(GPT_IMAGE_REQUEST_TIMEOUT_MS / 1000)
+      }))
+    }
+
+    if (sourceSignal.aborted) {
+      throw error
+    }
+
+    if (isGPTFetchNetworkError(error)) {
+      throw createGPTNetworkError(error, url, startedAt)
+    }
+
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+    sourceSignal.removeEventListener('abort', abortFromSource)
+  }
+}
+
 function extractGPTImageUrlsFromResponse(response: any): string[] {
   const items = Array.isArray(response?.data) ? response.data : []
   const urls: string[] = []
@@ -1581,18 +1802,13 @@ async function handleSubmitGPT() {
 
         appendGPTImageOptions(fd)
 
-        const res = await fetch(url, {
+        response = await requestGPTImageJSON(url, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${configStore.apiKey}`
           },
-          body: fd,
-          signal: ctrl.signal
-        })
-
-        const text = await res.text()
-        if (!res.ok) throw parseApiError(text, res.status)
-        response = JSON.parse(text)
+          body: fd
+        }, ctrl.signal)
       } else {
         const body: Record<string, any> = {
           model: actualGPTModel.value,
@@ -1606,19 +1822,14 @@ async function handleSubmitGPT() {
 
         appendGPTImageOptions(body)
 
-        const res = await fetch(url, {
+        response = await requestGPTImageJSON(url, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${configStore.apiKey}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(body),
-          signal: ctrl.signal
-        })
-
-        const text = await res.text()
-        if (!res.ok) throw parseApiError(text, res.status)
-        response = JSON.parse(text)
+          body: JSON.stringify(body)
+        }, ctrl.signal)
       }
     } else {
       const body: Record<string, any> = {
@@ -1628,20 +1839,36 @@ async function handleSubmitGPT() {
 
       appendGPTImageOptions(body, { includeMultiple: true })
 
+      const shouldUseGPTImageStream = actualGPTModel.value === 'gpt-image-2'
+      if (shouldUseGPTImageStream) {
+        body.stream = true
+        body.partial_images = 0
+      }
+
       const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/generations'
-      const res = await fetch(url, {
+      const requestInit = {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${configStore.apiKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body),
-        signal: ctrl.signal
-      })
+        body: JSON.stringify(body)
+      }
 
-      const text = await res.text()
-      if (!res.ok) throw parseApiError(text, res.status)
-      response = JSON.parse(text)
+      try {
+        response = await requestGPTImageJSON(url, requestInit, ctrl.signal)
+      } catch (error) {
+        if (!shouldUseGPTImageStream || !isGPTImageStreamUnsupportedError(error)) {
+          throw error
+        }
+
+        delete body.stream
+        delete body.partial_images
+        response = await requestGPTImageJSON(url, {
+          ...requestInit,
+          body: JSON.stringify(body)
+        }, ctrl.signal)
+      }
     }
 
     const urls = extractGPTImageUrlsFromResponse(response)
