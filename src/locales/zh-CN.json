@@ -382,7 +382,6 @@
     "revisedPrompt": "优化后的提示词",
     "imageReady": "图片生成成功",
     "emptyResponse": "接口没有返回可用图片，请检查模型、参数或服务端兼容性",
-    "requestTimeout": "图片生成请求已等待 {seconds} 秒仍未完成，请稍后重试，或改用较低质量/较小尺寸。",
     "networkFailure": "图片生成请求在浏览器网络层失败（已等待 {seconds} 秒，端点：{endpoint}）。原始错误：{message}。这通常是 CORS、网关超时或连接被中途关闭导致；客户端已对 gpt-image-2 使用流式生成来降低长请求超时风险，如仍失败请检查 API 地址/网关是否支持长连接和流式响应。",
     "waitingForPrompt": "输入提示词后点击生成...",
     "qualityOptions": {

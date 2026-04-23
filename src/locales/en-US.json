@@ -383,7 +383,6 @@
     "revisedPrompt": "Revised Prompt",
     "imageReady": "Image generated successfully",
     "emptyResponse": "The API did not return a usable image. Check the model, parameters, or server compatibility.",
-    "requestTimeout": "The image generation request has been waiting for {seconds} seconds and did not finish. Try again later, or use lower quality/a smaller size.",
     "networkFailure": "The image generation request failed at the browser network layer after {seconds} seconds. Endpoint: {endpoint}. Original error: {message}. This usually means CORS, a gateway timeout, or a connection closed mid-request. The client now uses streaming generation for gpt-image-2 to reduce long-request timeouts; if it still fails, check whether the API gateway supports long-lived and streaming responses.",
     "waitingForPrompt": "Enter a prompt and click generate...",
     "qualityOptions": {

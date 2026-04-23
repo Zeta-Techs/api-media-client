@@ -85,7 +85,6 @@ const GPT_IMAGE_2_MAX_RATIO = 3
 const GPT_MASK_HISTORY_LIMIT = 40
 const GPT_MASK_MIN_ZOOM = 0.08
 const GPT_MASK_MAX_ZOOM = 8
-const GPT_IMAGE_REQUEST_TIMEOUT_MS = 240000
 
 const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: 'auto', value: 'auto' },
@@ -1667,7 +1666,6 @@ async function requestGPTImageJSON(
 ): Promise<any> {
   const startedAt = Date.now()
   const requestController = new AbortController()
-  let didTimeout = false
 
   const abortFromSource = () => requestController.abort()
   if (sourceSignal.aborted) {
@@ -1675,11 +1673,6 @@ async function requestGPTImageJSON(
   } else {
     sourceSignal.addEventListener('abort', abortFromSource, { once: true })
   }
-
-  const timeoutId = window.setTimeout(() => {
-    didTimeout = true
-    requestController.abort()
-  }, GPT_IMAGE_REQUEST_TIMEOUT_MS)
 
   try {
     const res = await fetch(url, {
@@ -1701,12 +1694,6 @@ async function requestGPTImageJSON(
     const text = await res.text()
     return JSON.parse(text)
   } catch (error) {
-    if (didTimeout) {
-      throw new Error(t('dalle.requestTimeout', {
-        seconds: Math.round(GPT_IMAGE_REQUEST_TIMEOUT_MS / 1000)
-      }))
-    }
-
     if (sourceSignal.aborted) {
       throw error
     }
@@ -1717,7 +1704,6 @@ async function requestGPTImageJSON(
 
     throw error
   } finally {
-    window.clearTimeout(timeoutId)
     sourceSignal.removeEventListener('abort', abortFromSource)
   }
 }
