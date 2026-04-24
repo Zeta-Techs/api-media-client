@@ -319,7 +319,7 @@
       },
       "gpt54": {
         "title": "gpt-5.4 生图",
-        "description": "基于 Responses API，支持当前页面内多轮追画。"
+        "description": "基于 Responses API 调用 GPT Image 2，支持当前页面内多轮追画。"
       }
     },
     "responses": {
@@ -328,7 +328,8 @@
       "responsesApi": "Responses API",
       "apiModeHint": "Image API 保留当前生成与编辑流程。Responses API 使用 gpt-5.4，并支持当前页面内的多轮续画。",
       "modelLabel": "gpt-5.4",
-      "modelDescription": "Responses 图像生成使用 gpt-5.4 主线模型和 image_generation 工具。",
+      "modelDescription": "基于 Responses API 使用 gpt-5.4 调用 GPT Image 2，并支持当前页面内多轮追画。",
+      "zetaTokenWarning": "ZetaTechs API 用户请使用 openai/codex 分组的令牌（API Key）。",
       "conversation": "当前对话",
       "newConversation": "新建对话",
       "modeHint": "首轮点击生成会在当前页面内开启一个新的图片对话。",

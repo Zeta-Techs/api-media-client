@@ -320,7 +320,7 @@
       },
       "gpt54": {
         "title": "gpt-5.4 Image",
-        "description": "Responses API image generation with page-local multi-turn follow-up support."
+        "description": "Calls GPT Image 2 through the Responses API with page-local multi-turn follow-up support."
       }
     },
     "responses": {
@@ -329,7 +329,8 @@
       "responsesApi": "Responses API",
       "apiModeHint": "Image API keeps the current generation and edit flow. Responses API uses gpt-5.4 with page-local follow-up turns.",
       "modelLabel": "gpt-5.4",
-      "modelDescription": "Responses image generation uses the gpt-5.4 mainline model with the image_generation tool.",
+      "modelDescription": "Uses gpt-5.4 via the Responses API to call GPT Image 2 with page-local multi-turn follow-up support.",
+      "zetaTokenWarning": "ZetaTechs API users should use an openai/codex group token (API Key).",
       "conversation": "Conversation",
       "newConversation": "New Conversation",
       "modeHint": "The first generate request starts a new image conversation in this page.",

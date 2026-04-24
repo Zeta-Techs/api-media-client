@@ -87,7 +87,7 @@ interface GPTImageResponseItem {
 interface GPTResponsesImageGenerationCall {
   type: string
   id?: string
-  result?: string
+  result?: string | string[]
   revised_prompt?: string
   output_format?: string
 }
@@ -469,6 +469,19 @@ const currentGPTGenerationRouteDescription = computed(() =>
   isGPTResponsesApi.value
     ? t('dalle.modelCards.gpt54.description')
     : t('dalle.modelCards.gptImage2.description')
+)
+const isZetaEndpoint = computed(() => {
+  const baseUrl = configStore.baseUrl?.trim()
+  if (!baseUrl) return false
+
+  try {
+    return new URL(baseUrl).hostname.toLowerCase().includes('zeta')
+  } catch {
+    return baseUrl.toLowerCase().includes('zeta')
+  }
+})
+const shouldShowGPT54ZetaTokenWarning = computed(() =>
+  isGPTResponsesApi.value && isZetaEndpoint.value
 )
 const gptGenerationRouteCards = computed(() => [
   {
@@ -890,8 +903,7 @@ function appendGPTResponsesToolOptions(tool: Record<string, any>) {
 
 function buildGPTResponsesRequestBody() {
   const tool: Record<string, any> = {
-    type: 'image_generation',
-    action: isContinuingGPTResponsesConversation.value ? 'auto' : 'generate'
+    type: 'image_generation'
   }
 
   appendGPTResponsesToolOptions(tool)
@@ -899,7 +911,6 @@ function buildGPTResponsesRequestBody() {
   const body: Record<string, any> = {
     model: GPT_RESPONSES_MODEL,
     input: formGPT.value.prompt,
-    tool_choice: { type: 'image_generation' },
     tools: [tool]
   }
 
@@ -2091,29 +2102,96 @@ function extractGPTImageUrlsFromResponsesResponse(response: any) {
   const imageCalls = output.filter((item: any): item is GPTResponsesImageGenerationCall =>
     item?.type === 'image_generation_call'
   )
+  const nestedImageCalls = output.flatMap((item: any) =>
+    Array.isArray(item?.content)
+      ? item.content.filter((contentItem: any) => contentItem?.type === 'image_generation_call')
+      : []
+  ) as GPTResponsesImageGenerationCall[]
+  const allImageCalls = [...imageCalls, ...nestedImageCalls]
 
-  if (imageCalls.length === 0) {
+  const extractResponsesDiagnosticText = () => {
+    const parts: string[] = []
+
+    if (typeof response?.error?.message === 'string' && response.error.message.trim()) {
+      parts.push(response.error.message.trim())
+    }
+
+    if (typeof response?.output_text === 'string' && response.output_text.trim()) {
+      parts.push(response.output_text.trim())
+    }
+
+    for (const item of output) {
+      if (typeof item?.text === 'string' && item.text.trim()) {
+        parts.push(item.text.trim())
+      }
+
+      if (!Array.isArray(item?.content)) continue
+
+      for (const contentItem of item.content) {
+        if (typeof contentItem?.text === 'string' && contentItem.text.trim()) {
+          parts.push(contentItem.text.trim())
+        }
+
+        if (typeof contentItem?.output_text === 'string' && contentItem.output_text.trim()) {
+          parts.push(contentItem.output_text.trim())
+        }
+
+        if (typeof contentItem?.refusal === 'string' && contentItem.refusal.trim()) {
+          parts.push(contentItem.refusal.trim())
+        }
+      }
+    }
+
+    const uniqueParts = [...new Set(parts)]
+    return uniqueParts.join(' ').slice(0, 400)
+  }
+
+  if (allImageCalls.length === 0 && Array.isArray(response?.data)) {
+    const urls = extractGPTImageUrlsFromResponse(response)
+    return {
+      urls,
+      revisedPrompt: '',
+      responseId: typeof response?.id === 'string' ? response.id : null
+    }
+  }
+
+  if (allImageCalls.length === 0) {
+    const diagnosticText = extractResponsesDiagnosticText()
+    if (diagnosticText) {
+      throw new Error(`${t('dalle.responses.errors.noImageGenerationCall')} ${diagnosticText}`)
+    }
     throw new Error(t('dalle.responses.errors.noImageGenerationCall'))
   }
 
   const urls: string[] = []
   let revisedPrompt = ''
 
-  for (const item of imageCalls) {
+  for (const item of allImageCalls) {
     if (typeof item.revised_prompt === 'string' && item.revised_prompt.trim()) {
       revisedPrompt = item.revised_prompt.trim()
     }
 
-    if (typeof item.result === 'string' && item.result.trim()) {
+    const resultList =
+      typeof item.result === 'string'
+        ? [item.result]
+        : Array.isArray(item.result)
+          ? item.result.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+          : []
+
+    for (const result of resultList) {
       const mimeType = item.output_format
         ? getMimeTypeFromOutputFormat(item.output_format)
         : getMimeTypeFromOutputFormat(formGPT.value.outputFormat)
-      const blob = base64ToBlob(item.result, mimeType)
+      const blob = base64ToBlob(result, mimeType)
       urls.push(URL.createObjectURL(blob))
     }
   }
 
   if (urls.length === 0) {
+    const diagnosticText = extractResponsesDiagnosticText()
+    if (diagnosticText) {
+      throw new Error(`${t('dalle.responses.errors.noImageResult')} ${diagnosticText}`)
+    }
     throw new Error(t('dalle.responses.errors.noImageResult'))
   }
 
@@ -3170,6 +3248,9 @@ onUnmounted(() => {
                   <div class="gpt-current-model-card">
                     <div class="gpt-current-model-value">{{ currentGPTGenerateModelLabel }}</div>
                     <div class="form-hint">{{ currentGPTGenerationRouteDescription }}</div>
+                    <div v-if="shouldShowGPT54ZetaTokenWarning" class="gpt-zeta-warning">
+                      {{ t('dalle.responses.zetaTokenWarning') }}
+                    </div>
                   </div>
                 </NFormItem>
 
@@ -4140,6 +4221,17 @@ onUnmounted(() => {
 .responses-model-name {
   font-size: 14px;
   font-weight: 700;
+}
+
+.gpt-zeta-warning {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.08);
+  color: #ff8f8f;
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 600;
 }
 
 .responses-conversation-meta,
