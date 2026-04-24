@@ -12,7 +12,13 @@ import { useConfigStore } from '@/stores/config'
 import { useHistoryStore } from '@/stores/history'
 import { message } from '@/composables/useNaiveMessage'
 import { parseApiError } from '@/utils/api'
-import type { GPTImageFormData, FluxFormData, GeminiAIStudioFormData, GeminiVertexFormData } from '@/types'
+import type {
+  GPTImageFormData,
+  FluxFormData,
+  GeminiAIStudioFormData,
+  GeminiVertexFormData,
+  HistoryItem
+} from '@/types'
 import { BatchModeSwitch, BatchImagePanel } from '@/components/batch'
 
 const { t } = useI18n()
@@ -444,6 +450,40 @@ const currentGPTModelInfo = computed(() => {
   return gptModelOptions.find(m => m.value === formGPT.value.model)
 })
 const gptResponsesModelLabel = computed(() => t('dalle.responses.modelLabel'))
+const currentGPTImageApiModelLabel = computed(() => {
+  if (isGPTCustomModel.value) {
+    return formGPT.value.customModel.trim() || t('common.custom')
+  }
+
+  return actualGPTModel.value || 'gpt-image-2'
+})
+const currentGPTGenerateModelLabel = computed(() =>
+  isGPTResponsesApi.value ? GPT_RESPONSES_MODEL : currentGPTImageApiModelLabel.value
+)
+const currentGPTGenerationRouteLabel = computed(() =>
+  isGPTResponsesApi.value
+    ? t('dalle.modelCards.gpt54.title')
+    : t('dalle.modelCards.gptImage2.title')
+)
+const currentGPTGenerationRouteDescription = computed(() =>
+  isGPTResponsesApi.value
+    ? t('dalle.modelCards.gpt54.description')
+    : t('dalle.modelCards.gptImage2.description')
+)
+const gptGenerationRouteCards = computed(() => [
+  {
+    key: 'image-api' as const,
+    title: t('dalle.modelCards.gptImage2.title'),
+    description: t('dalle.modelCards.gptImage2.description'),
+    active: gptApiMode.value === 'image-api'
+  },
+  {
+    key: 'responses-api' as const,
+    title: t('dalle.modelCards.gpt54.title'),
+    description: t('dalle.modelCards.gpt54.description'),
+    active: gptApiMode.value === 'responses-api'
+  }
+])
 const gptModelDescriptionKey = computed(() =>
   isGPTResponsesApi.value
     ? GPT_RESPONSES_CAPABILITIES.description
@@ -560,6 +600,9 @@ const gptResponsesConversationHint = computed(() =>
 )
 const gptResponsesTurnLabel = computed(() =>
   t('dalle.responses.currentTurn', { count: responsesTurnCount.value })
+)
+const gptCurrentModelHint = computed(() =>
+  t('dalle.currentModelValue', { model: currentGPTGenerateModelLabel.value })
 )
 
 const gptPrimaryReferenceImage = computed(() => gptReferenceImages.value[0] ?? null)
@@ -1098,7 +1141,7 @@ const currentFluxModelInfo = computed(() => {
 })
 
 const previewModelLabel = computed(() => {
-  if (mainTab.value === 'gpt-image') return 'GPT-Image'
+  if (mainTab.value === 'gpt-image') return currentGPTGenerateModelLabel.value
   if (mainTab.value === 'flux') return 'Flux'
   return 'Nano Banana'
 })
@@ -1116,13 +1159,21 @@ const previewStatusText = computed(() => {
 })
 
 const previewEmptyTitle = computed(() => {
-  if (mainTab.value === 'gpt-image') return t('image.preview.empty.gptImageTitle')
+  if (mainTab.value === 'gpt-image') {
+    return isGPTResponsesApi.value
+      ? t('image.preview.empty.gpt54Title')
+      : t('image.preview.empty.gptImage2Title')
+  }
   if (mainTab.value === 'flux') return t('image.preview.empty.fluxTitle')
   return t('image.preview.empty.nanoBananaTitle')
 })
 
 const previewEmptyDescription = computed(() => {
-  if (mainTab.value === 'gpt-image') return t('image.preview.empty.gptImageDescription')
+  if (mainTab.value === 'gpt-image') {
+    return isGPTResponsesApi.value
+      ? t('image.preview.empty.gpt54Description')
+      : t('image.preview.empty.gptImage2Description')
+  }
   if (mainTab.value === 'flux') return t('image.preview.empty.fluxDescription')
   return t('image.preview.empty.nanoBananaDescription')
 })
@@ -1161,9 +1212,118 @@ function loadFluxSettings() {
   }
 }
 
+function resetImageViewPreviewState() {
+  errorMessage.value = ''
+  gptRevisedPrompt.value = ''
+  revokeGPTImageUrls(gptImageUrls.value)
+  gptImageUrls.value = []
+  imageUrl.value = ''
+  imageInfo.value = null
+  if (fluxImageUrl.value) {
+    try {
+      URL.revokeObjectURL(fluxImageUrl.value)
+    } catch {
+      // Ignore remote URLs.
+    }
+  }
+  fluxImageUrl.value = ''
+  fluxImageInfo.value = null
+}
+
+function applyPendingImageReload(item: HistoryItem) {
+  if (item.type !== 'image') return
+
+  const params = item.params as any
+  resetImageViewPreviewState()
+
+  if (params.format === 'gpt-image') {
+    mainTab.value = 'gpt-image'
+    formGPT.value.prompt = params.prompt || ''
+    formGPT.value.model = params.model || 'gpt-image-2'
+    formGPT.value.customModel = params.customModel || ''
+    gptMode.value = params.mode === 'edit' ? 'edit' : 'generate'
+    gptApiMode.value = params.apiMode === 'responses-api' ? 'responses-api' : 'image-api'
+    gptEditInputSource.value = params.editInputSource === 'url' ? 'url' : 'upload'
+    formGPT.value.size = params.sizePreset || params.size || 'auto'
+    formGPT.value.customSize = params.customSize || ''
+    formGPT.value.quality = params.quality || 'auto'
+    formGPT.value.background = params.background || 'auto'
+    formGPT.value.outputFormat = params.outputFormat || 'png'
+    formGPT.value.outputCompression = params.outputCompression ?? 100
+    formGPT.value.n = params.n || 1
+    formGPT.value.moderation = params.moderation || 'auto'
+    gptReferenceImages.value = []
+    gptMaskImage.value = null
+    gptUploadedMaskImage.value = null
+    gptMaskUploadKey.value += 1
+    loadGPTMaskReferenceImage(null)
+    gptReferenceImageUrls.value = gptEditInputSource.value === 'url' && Array.isArray(params.referenceImageUrls)
+      ? params.referenceImageUrls.filter(Boolean).slice(0, 10)
+      : []
+    gptMaskUrl.value = gptEditInputSource.value === 'url' ? (params.maskUrl || '') : ''
+    resetGPTResponsesConversation({ silent: true })
+    normalizeGPTSizeForModel(formGPT.value.model)
+    if (gptApiMode.value === 'responses-api') {
+      normalizeGPTSizeForResponsesApi()
+    }
+    return
+  }
+
+  if (params.format === 'gemini-ai-studio') {
+    mainTab.value = 'nano-banana'
+    geminiSubTab.value = 'ai-studio'
+    formAI.value.prompt = params.prompt || ''
+    formAI.value.model = params.model || 'gemini-3-pro-image-preview'
+    formAI.value.customModel = params.customModel || ''
+    formAI.value.imageSize = params.imageSize || '1K'
+    formAI.value.aspectRatio = params.aspectRatio || 'auto'
+    formAI.value.googleSearch = params.googleSearch ?? true
+    formAI.value.temperature = params.temperature ?? 1
+    formAI.value.topP = params.topP ?? 0.95
+    formAI.value.maxOutputTokens = params.maxOutputTokens ?? 32768
+    formAI.value.stopSequences = Array.isArray(params.stopSequences) ? params.stopSequences.join(', ') : ''
+    return
+  }
+
+  if (params.format === 'gemini-vertex') {
+    mainTab.value = 'nano-banana'
+    geminiSubTab.value = 'vertex'
+    formVertex.value.prompt = params.prompt || ''
+    formVertex.value.model = params.model || 'gemini-3-pro-image-preview'
+    formVertex.value.customModel = params.customModel || ''
+    formVertex.value.imageSize = params.imageSize || '1K'
+    formVertex.value.aspectRatio = params.aspectRatio || 'auto'
+    formVertex.value.outputMimeType = params.outputMimeType || 'image/png'
+    formVertex.value.personGeneration = params.personGeneration || 'ALLOW_ALL'
+    formVertex.value.temperature = params.temperature ?? 1
+    formVertex.value.topP = params.topP ?? 0.95
+    formVertex.value.maxOutputTokens = params.maxOutputTokens ?? 32768
+    return
+  }
+
+  if (params.format === 'flux') {
+    mainTab.value = 'flux'
+    formFlux.value.prompt = params.prompt || ''
+    formFlux.value.model = params.model || 'flux-kontext-pro'
+    formFlux.value.customModel = params.customModel || ''
+    formFlux.value.inputImageUrl = params.inputImageUrl || ''
+    formFlux.value.aspectRatio = params.aspectRatio || '1:1'
+    formFlux.value.outputFormat = params.outputFormat || 'png'
+    formFlux.value.seed = params.seed ?? null
+    formFlux.value.safetyTolerance = params.safetyTolerance ?? 2
+    formFlux.value.promptUpsampling = params.promptUpsampling ?? false
+    fluxInputImage.value = null
+  }
+}
+
 onMounted(() => {
   loadGPTSettings()
   loadFluxSettings()
+
+  const pendingItem = historyStore.consumePendingReload()
+  if (pendingItem?.type === 'image') {
+    applyPendingImageReload(pendingItem)
+  }
 })
 
 // ==================== Common Functions ====================
@@ -2990,16 +3150,27 @@ onUnmounted(() => {
                   </NRadioGroup>
                 </NFormItem>
 
-                <NFormItem v-if="gptMode === 'generate'" :label="t('dalle.responses.apiMode')">
-                  <NSpace vertical style="width: 100%">
-                    <NRadioGroup v-model:value="gptApiMode">
-                      <NSpace>
-                        <NRadio value="image-api">{{ t('dalle.responses.imageApi') }}</NRadio>
-                        <NRadio value="responses-api">{{ t('dalle.responses.responsesApi') }}</NRadio>
-                      </NSpace>
-                    </NRadioGroup>
-                    <div class="form-hint">{{ t('dalle.responses.apiModeHint') }}</div>
-                  </NSpace>
+                <NFormItem v-if="gptMode === 'generate'" :label="t('dalle.generationModel')">
+                  <div class="gpt-model-card-grid">
+                    <button
+                      v-for="option in gptGenerationRouteCards"
+                      :key="option.key"
+                      type="button"
+                      class="gpt-model-card"
+                      :class="{ 'is-active': option.active }"
+                      @click="gptApiMode = option.key"
+                    >
+                      <div class="gpt-model-card-title">{{ option.title }}</div>
+                      <div class="gpt-model-card-description">{{ option.description }}</div>
+                    </button>
+                  </div>
+                </NFormItem>
+
+                <NFormItem v-if="gptMode === 'generate'" :label="t('dalle.currentModel')">
+                  <div class="gpt-current-model-card">
+                    <div class="gpt-current-model-value">{{ currentGPTGenerateModelLabel }}</div>
+                    <div class="form-hint">{{ currentGPTGenerationRouteDescription }}</div>
+                  </div>
                 </NFormItem>
 
                 <!-- Model -->
@@ -3577,15 +3748,21 @@ onUnmounted(() => {
               {{ t('image.preview.refreshNotice') }}
             </NAlert>
 
-            <div v-if="mainTab === 'gpt-image' && isGPTResponsesApi" class="responses-preview-card">
+            <div v-if="mainTab === 'gpt-image'" class="responses-preview-card">
               <div class="responses-preview-meta">
-                <NTag size="small" :type="responsesConversationActive ? 'success' : 'default'">
-                  {{ gptResponsesConversationStatusLabel }}
-                </NTag>
-                <NTag size="small" round>{{ gptResponsesTurnLabel }}</NTag>
+                <NTag size="small" type="info">{{ currentGPTGenerationRouteLabel }}</NTag>
+                <NTag size="small" round>{{ currentGPTGenerateModelLabel }}</NTag>
+                <template v-if="isGPTResponsesApi">
+                  <NTag size="small" :type="responsesConversationActive ? 'success' : 'default'">
+                    {{ gptResponsesConversationStatusLabel }}
+                  </NTag>
+                  <NTag size="small" round>{{ gptResponsesTurnLabel }}</NTag>
+                </template>
               </div>
-              <div class="responses-preview-hint">{{ gptResponsesConversationHint }}</div>
-              <div v-if="gptRevisedPrompt" class="responses-preview-revised">
+              <div class="responses-preview-hint">
+                {{ isGPTResponsesApi ? gptResponsesConversationHint : gptCurrentModelHint }}
+              </div>
+              <div v-if="isGPTResponsesApi && gptRevisedPrompt" class="responses-preview-revised">
                 <div class="responses-preview-revised-title">{{ t('dalle.revisedPrompt') }}</div>
                 <div class="responses-preview-revised-text">{{ gptRevisedPrompt }}</div>
               </div>
@@ -3900,6 +4077,51 @@ onUnmounted(() => {
   opacity: 0.6;
 }
 
+.gpt-model-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.gpt-model-card {
+  appearance: none;
+  width: 100%;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.08), transparent 42%),
+    rgba(255, 255, 255, 0.02);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.gpt-model-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.24);
+}
+
+.gpt-model-card.is-active {
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 14px 34px rgba(34, 211, 238, 0.12);
+}
+
+.gpt-model-card-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gpt-model-card-description {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.gpt-current-model-card,
 .responses-model-card,
 .responses-conversation-card,
 .responses-preview-card {
@@ -3914,6 +4136,7 @@ onUnmounted(() => {
     rgba(255, 255, 255, 0.02);
 }
 
+.gpt-current-model-value,
 .responses-model-name {
   font-size: 14px;
   font-weight: 700;
@@ -4390,6 +4613,10 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .gpt-model-card-grid {
+    grid-template-columns: 1fr;
+  }
+
   .custom-size-editor-header {
     flex-direction: column;
     align-items: stretch;

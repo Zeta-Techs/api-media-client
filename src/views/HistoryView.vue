@@ -73,11 +73,61 @@ function getParamsPreview(item: HistoryItem): string {
   if (item.type === 'video') {
     return `${params.model || 'sora-2'} | ${params.seconds || '4'}s | ${params.size || ''}`
   } else if (item.type === 'image') {
+    if (params.format === 'gpt-image') {
+      const sourceLabel = getImageSourceLabel(item) || params.model || 'gpt-image-2'
+      const modeLabel = params.mode === 'edit' ? t('common.edit') : t('dalle.modeGenerate')
+      const sizeLabel = params.size || params.sizePreset || 'auto'
+      const turnLabel = params.apiMode === 'responses-api' && params.responsesTurnCount
+        ? ` | ${t('history.turnShort', { count: params.responsesTurnCount })}`
+        : ''
+      return `${sourceLabel} | ${modeLabel} | ${sizeLabel}${turnLabel}`
+    }
+
+    if (params.format === 'gemini-ai-studio') {
+      return `${t('history.imageSources.nanoAiStudio')} | ${params.imageSize || '1K'}`
+    }
+
+    if (params.format === 'gemini-vertex') {
+      return `${t('history.imageSources.nanoVertex')} | ${params.imageSize || '1K'}`
+    }
+
+    if (params.format === 'flux') {
+      return `${t('history.imageSources.flux')} | ${params.aspectRatio || '1:1'} | ${params.outputFormat || 'png'}`
+    }
+
     return `${params.model || ''} | ${params.imageSize || '1K'} | ${params.format || 'ai-studio'}`
   } else {
     // audio
     return `${params.model || 'whisper-1'} | ${params.responseFormat || 'json'} | ${params.language || 'auto'}`
   }
+}
+
+function getImageSourceLabel(item: HistoryItem): string | null {
+  if (item.type !== 'image') return null
+
+  const params = item.params as any
+
+  if (params.format === 'gpt-image') {
+    if (params.apiMode === 'responses-api') {
+      return t('history.imageSources.gpt54')
+    }
+
+    const modelLabel = params.model === 'custom'
+      ? (params.customModel || t('common.custom'))
+      : (params.model || 'gpt-image-2')
+
+    if (modelLabel === 'gpt-image-2') {
+      return t('history.imageSources.gptImage2')
+    }
+
+    return modelLabel
+  }
+
+  if (params.format === 'gemini-ai-studio') return t('history.imageSources.nanoAiStudio')
+  if (params.format === 'gemini-vertex') return t('history.imageSources.nanoVertex')
+  if (params.format === 'flux') return t('history.imageSources.flux')
+
+  return null
 }
 
 // Get type label
@@ -137,6 +187,9 @@ function getTypeLabel(type: string): string {
                 </NTag>
                 <NTag :type="getStatusColor(item.status)" size="small">
                   {{ item.status === 'completed' ? t('common.completed') : t('common.failed') }}
+                </NTag>
+                <NTag v-if="getImageSourceLabel(item)" size="small" round>
+                  {{ getImageSourceLabel(item) }}
                 </NTag>
                 <span class="item-date">{{ formatDate(item.createdAt) }}</span>
               </NSpace>

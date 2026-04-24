@@ -95,6 +95,10 @@
       "empty": {
         "gptImageTitle": "GPT-Image 结果会显示在这里",
         "gptImageDescription": "左侧可进行生成或编辑，完成后可在这里预览并下载生成结果。",
+        "gptImage2Title": "gpt-image-2 结果会显示在这里",
+        "gptImage2Description": "标准生图结果会在生成完成后显示在这里。",
+        "gpt54Title": "gpt-5.4 结果会显示在这里",
+        "gpt54Description": "gpt-5.4 多轮追画结果会在每一轮完成后显示在这里。",
         "nanoBananaTitle": "Nano Banana 结果会显示在这里",
         "nanoBananaDescription": "在左侧提交提示词后，生成的 Gemini 图片会显示在这里。",
         "fluxTitle": "Flux 结果会显示在这里",
@@ -133,6 +137,14 @@
     "confirmClearAll": "确定要清空所有历史记录吗？",
     "confirmDelete": "确定要删除这条记录吗？",
     "noPrompt": "（无提示词）",
+    "imageSources": {
+      "gptImage2": "gpt-image-2 生图",
+      "gpt54": "gpt-5.4 生图",
+      "nanoAiStudio": "Nano Banana · AI Studio",
+      "nanoVertex": "Nano Banana · Vertex",
+      "flux": "Flux"
+    },
+    "turnShort": "第 {count} 轮",
     "filter": {
       "all": "全部",
       "video": "视频",
@@ -297,12 +309,25 @@
     "mode": "模式",
     "modeGenerate": "生成",
     "modeEdit": "编辑",
+    "generationModel": "生成模型",
+    "currentModel": "当前模型",
+    "currentModelValue": "当前使用 {model}",
+    "modelCards": {
+      "gptImage2": {
+        "title": "gpt-image-2 生图",
+        "description": "标准图片生成，沿用 Image API 参数体系。"
+      },
+      "gpt54": {
+        "title": "gpt-5.4 生图",
+        "description": "基于 Responses API，支持当前页面内多轮追画。"
+      }
+    },
     "responses": {
       "apiMode": "调用方式",
       "imageApi": "Image API",
       "responsesApi": "Responses API",
       "apiModeHint": "Image API 保留当前生成与编辑流程。Responses API 使用 gpt-5.4，并支持当前页面内的多轮续画。",
-      "modelLabel": "gpt-5.4（Responses API）",
+      "modelLabel": "gpt-5.4",
       "modelDescription": "Responses 图像生成使用 gpt-5.4 主线模型和 image_generation 工具。",
       "conversation": "当前对话",
       "newConversation": "新建对话",
