@@ -464,7 +464,6 @@ const gptModerationOptions = computed(() => [
 const currentGPTModelInfo = computed(() => {
   return gptModelOptions.find(m => m.value === formGPT.value.model)
 })
-const gptResponsesModelLabel = computed(() => t('dalle.responses.modelLabel'))
 const currentGPTImageApiModelLabel = computed(() => {
   if (isGPTCustomModel.value) {
     return formGPT.value.customModel.trim() || t('common.custom')
@@ -3571,23 +3570,13 @@ onUnmounted(() => {
                 </NFormItem>
 
                 <!-- Model -->
-                <NFormItem :label="t('common.model')">
+                <NFormItem v-if="!isGPTResponsesApi" :label="t('common.model')">
                   <NSpace vertical style="width: 100%">
-                    <template v-if="isGPTResponsesApi">
-                      <div class="responses-model-card">
-                        <div class="responses-model-name">{{ gptResponsesModelLabel }}</div>
-                        <div v-if="gptModelDescriptionKey" class="model-description">
-                          {{ t(gptModelDescriptionKey) }}
-                        </div>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <NSelect v-model:value="formGPT.model" :options="gptModelOptions" />
-                      <NInput v-if="isGPTCustomModel" v-model:value="formGPT.customModel" :placeholder="t('common.custom')" />
-                      <div v-if="gptModelDescriptionKey" class="model-description">
-                        {{ t(gptModelDescriptionKey) }}
-                      </div>
-                    </template>
+                    <NSelect v-model:value="formGPT.model" :options="gptModelOptions" />
+                    <NInput v-if="isGPTCustomModel" v-model:value="formGPT.customModel" :placeholder="t('common.custom')" />
+                    <div v-if="gptModelDescriptionKey" class="model-description">
+                      {{ t(gptModelDescriptionKey) }}
+                    </div>
                   </NSpace>
                 </NFormItem>
 
@@ -4519,7 +4508,6 @@ onUnmounted(() => {
 }
 
 .gpt-current-model-card,
-.responses-model-card,
 .responses-conversation-card,
 .responses-preview-card {
   display: flex;
@@ -4533,8 +4521,7 @@ onUnmounted(() => {
     rgba(255, 255, 255, 0.02);
 }
 
-.gpt-current-model-value,
-.responses-model-name {
+.gpt-current-model-value {
   font-size: 14px;
   font-weight: 700;
 }
