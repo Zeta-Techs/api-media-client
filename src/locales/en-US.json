@@ -98,7 +98,7 @@
         "gptImage2Title": "gpt-image-2 results will appear here",
         "gptImage2Description": "Standard Image API image results will be shown here after generation.",
         "gpt54Title": "gpt-5.4 results will appear here",
-        "gpt54Description": "gpt-5.4 generation or edit results will appear here after each turn.",
+        "gpt54Description": "Multi-turn gpt-5.4 image results will appear here after each follow-up turn.",
         "nanoBananaTitle": "Nano Banana results will appear here",
         "nanoBananaDescription": "Submit a prompt on the left, then preview the generated Gemini image here.",
         "fluxTitle": "Flux results will appear here",
@@ -311,7 +311,6 @@
     "modeGenerate": "Generate",
     "modeEdit": "Edit",
     "generationModel": "Generation Model",
-    "requestModel": "Image Method",
     "currentModel": "Current Model",
     "currentModelValue": "Using {model}",
     "modelCards": {
@@ -321,24 +320,21 @@
       },
       "gpt54": {
         "title": "gpt-5.4 Image",
-        "description": "Uses the Responses API to call GPT Image 2, with page-local multi-turn follow-up support."
+        "description": "Calls GPT Image 2 through the Responses API with page-local multi-turn follow-up support."
       }
     },
     "responses": {
       "apiMode": "API Mode",
       "imageApi": "Image API",
       "responsesApi": "Responses API",
-      "apiModeHint": "Image API keeps the current generation and edit flow. Responses API uses gpt-5.4 to call GPT Image 2 with page-local follow-up turns.",
+      "apiModeHint": "Image API keeps the current generation and edit flow. Responses API uses gpt-5.4 with page-local follow-up turns.",
       "modelLabel": "gpt-5.4",
-      "modelDescription": "Uses the Responses API to call GPT Image 2 through gpt-5.4, with page-local multi-turn follow-up support.",
+      "modelDescription": "Uses gpt-5.4 via the Responses API to call GPT Image 2 with page-local multi-turn follow-up support.",
       "zetaTokenWarning": "ZetaTechs API users should use an openai/codex group token (API Key).",
       "conversation": "Conversation",
       "newConversation": "New Conversation",
       "modeHint": "The first generate request starts a new image conversation in this page.",
-      "modeHintEdit": "The first edit request starts a new image-edit conversation in this page.",
       "continuationHint": "The next generate request will continue from the previous successful Responses API turn in this page.",
-      "continuationHintEdit": "The next edit request will continue from the previous successful Responses API turn in this page.",
-      "editModeHint": "Responses edit supports uploaded images, image URLs, and Files API file IDs. Masks apply to the first input image.",
       "currentTurn": "Turn {count}",
       "reset": "Responses API conversation reset.",
       "status": {
@@ -361,15 +357,9 @@
     "referenceImageUrlsRequired": "Enter at least one reference image URL to edit",
     "referenceImageUrlsPlaceholder": "https://example.com/image-1.png\nhttps://example.com/image-2.png",
     "referenceImageUrlsHint": "Enter one HTTPS image URL per line, up to 10 images",
-    "referenceImageFileIds": "Reference Image File IDs",
-    "referenceImageFileIdsRequired": "Enter at least one Files API file ID to edit",
-    "referenceImageFileIdsPlaceholder": "file_abc123\nfile_def456",
-    "referenceImageFileIdsHint": "Enter one OpenAI Files API image file ID per line, up to 10 images",
     "mask": "Mask Image",
     "maskUrl": "Mask URL",
     "maskUrlPlaceholder": "https://example.com/mask.png",
-    "maskFileId": "Mask File ID",
-    "maskFileIdPlaceholder": "file_mask123",
     "uploadMask": "Upload Mask (PNG)",
     "maskEditor": {
       "title": "Visual mask editor",
@@ -404,8 +394,7 @@
     "editInputSource": "Edit Input",
     "editInputSources": {
       "upload": "Upload Files",
-      "url": "Use URLs",
-      "fileId": "Use File IDs"
+      "url": "Use URLs"
     },
     "size": "Size",
     "customSizeOption": "Custom Size",
