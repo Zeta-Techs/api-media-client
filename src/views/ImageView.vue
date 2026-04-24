@@ -43,7 +43,7 @@ const geminiSubTab = ref<'ai-studio' | 'vertex'>('ai-studio')
 const DALLE_SETTINGS_KEY = 'dalle-form-settings'
 const FLUX_SETTINGS_KEY = 'flux-form-settings'
 
-type GPTEditInputSource = 'upload' | 'url'
+type GPTEditInputSource = 'upload' | 'url' | 'file-id'
 type GPTApiMode = 'image-api' | 'responses-api'
 
 interface GPTModelCapabilities {
@@ -90,6 +90,16 @@ interface GPTResponsesImageGenerationCall {
   result?: string | string[]
   revised_prompt?: string
   output_format?: string
+}
+
+interface GPTResponsesInputImage {
+  type: 'input_image'
+  image_url?: string
+  file_id?: string
+  input_image_mask?: {
+    image_url?: string
+    file_id?: string
+  }
 }
 
 interface GPTResponsesOutputTextItem {
@@ -217,7 +227,7 @@ const GPT_MODEL_CAPABILITIES: Record<string, GPTModelCapabilities> = {
 
 const GPT_RESPONSES_CAPABILITIES: GPTModelCapabilities = {
   description: 'dalle.responses.modelDescription',
-  supportsEdit: false,
+  supportsEdit: true,
   supportsQuality: true,
   supportsBackground: true,
   supportsTransparentBackground: false,
@@ -249,15 +259,18 @@ const gptApiMode = ref<GPTApiMode>('image-api')
 const gptEditInputSource = ref<GPTEditInputSource>('upload')
 const gptReferenceImages = ref<File[]>([])
 const gptReferenceImageUrls = ref<string[]>([])
+const gptReferenceImageFileIds = ref<string[]>([])
 const gptMaskImage = ref<File | null>(null)
 const gptUploadedMaskImage = ref<File | null>(null)
 const gptMaskUrl = ref('')
+const gptMaskFileId = ref('')
 const gptImageUrls = ref<string[]>([])
 const gptRevisedPrompt = ref('')
 const responsesConversationActive = ref(false)
 const responsesPreviousResponseId = ref<string | null>(null)
 const responsesTurnCount = ref(0)
 const responsesLastResponseId = ref<string | null>(null)
+const responsesLastImageGenerationCallId = ref<string | null>(null)
 const isHydratingGPTSettings = ref(false)
 
 const gptMaskViewportRef = ref<HTMLDivElement | null>(null)
@@ -399,13 +412,15 @@ const isGPTCustomModel = computed(() => formGPT.value.model === 'custom')
 const actualGPTModel = computed(() =>
   isGPTCustomModel.value ? formGPT.value.customModel.trim() : formGPT.value.model
 )
-const isGPTResponsesApi = computed(() =>
+const isGPTResponsesMode = computed(() =>
   mainTab.value === 'gpt-image' &&
-  gptMode.value === 'generate' &&
   gptApiMode.value === 'responses-api'
 )
+const isGPTResponsesEditMode = computed(() =>
+  isGPTResponsesMode.value && gptMode.value === 'edit'
+)
 const isContinuingGPTResponsesConversation = computed(() =>
-  isGPTResponsesApi.value &&
+  isGPTResponsesMode.value &&
   responsesConversationActive.value &&
   Boolean(responsesPreviousResponseId.value)
 )
@@ -413,16 +428,16 @@ const isContinuingGPTResponsesConversation = computed(() =>
 const currentGPTCapabilities = computed(() =>
   GPT_MODEL_CAPABILITIES[formGPT.value.model] || GPT_MODEL_CAPABILITIES['gpt-image-2']
 )
-const currentGPTGenerateCapabilities = computed(() =>
-  isGPTResponsesApi.value ? GPT_RESPONSES_CAPABILITIES : currentGPTCapabilities.value
+const currentGPTRequestCapabilities = computed(() =>
+  isGPTResponsesMode.value ? GPT_RESPONSES_CAPABILITIES : currentGPTCapabilities.value
 )
 
 const gptSizeOptions = computed(() => {
-  const options = currentGPTGenerateCapabilities.value.supportsFlexibleSize
+  const options = currentGPTRequestCapabilities.value.supportsFlexibleSize
     ? [...GPT_IMAGE_2_SIZE_OPTIONS]
     : [...(GPT_LEGACY_SIZE_OPTIONS[formGPT.value.model] || GPT_LEGACY_SIZE_OPTIONS['gpt-image-1'])]
 
-  if (currentGPTGenerateCapabilities.value.supportsFlexibleSize) {
+  if (currentGPTRequestCapabilities.value.supportsFlexibleSize) {
     options.push({
       label: t('dalle.customSizeOption'),
       value: 'custom'
@@ -441,10 +456,10 @@ const gptQualityOptions = computed(() => [
 
 const gptBackgroundOptions = computed(() => {
   const options = [{ label: t('dalle.backgroundOptions.auto'), value: 'auto' }]
-  if (currentGPTGenerateCapabilities.value.supportsTransparentBackground) {
+  if (currentGPTRequestCapabilities.value.supportsTransparentBackground) {
     options.push({ label: t('dalle.backgroundOptions.transparent'), value: 'transparent' })
   }
-  if (currentGPTGenerateCapabilities.value.supportsBackground) {
+  if (currentGPTRequestCapabilities.value.supportsBackground) {
     options.push({ label: t('dalle.backgroundOptions.opaque'), value: 'opaque' })
   }
   return options
@@ -473,15 +488,15 @@ const currentGPTImageApiModelLabel = computed(() => {
   return actualGPTModel.value || 'gpt-image-2'
 })
 const currentGPTGenerateModelLabel = computed(() =>
-  isGPTResponsesApi.value ? GPT_RESPONSES_MODEL : currentGPTImageApiModelLabel.value
+  isGPTResponsesMode.value ? GPT_RESPONSES_MODEL : currentGPTImageApiModelLabel.value
 )
 const currentGPTGenerationRouteLabel = computed(() =>
-  isGPTResponsesApi.value
+  isGPTResponsesMode.value
     ? t('dalle.modelCards.gpt54.title')
     : t('dalle.modelCards.gptImage2.title')
 )
 const currentGPTGenerationRouteDescription = computed(() =>
-  isGPTResponsesApi.value
+  isGPTResponsesMode.value
     ? t('dalle.modelCards.gpt54.description')
     : t('dalle.modelCards.gptImage2.description')
 )
@@ -496,7 +511,7 @@ const isZetaEndpoint = computed(() => {
   }
 })
 const shouldShowGPT54ZetaTokenWarning = computed(() =>
-  isGPTResponsesApi.value && isZetaEndpoint.value
+  isGPTResponsesMode.value && isZetaEndpoint.value
 )
 const gptGenerationRouteCards = computed(() => [
   {
@@ -513,22 +528,24 @@ const gptGenerationRouteCards = computed(() => [
   }
 ])
 const gptModelDescriptionKey = computed(() =>
-  isGPTResponsesApi.value
+  isGPTResponsesMode.value
     ? GPT_RESPONSES_CAPABILITIES.description
     : currentGPTModelInfo.value?.description
 )
 
-const supportsQuality = computed(() => currentGPTGenerateCapabilities.value.supportsQuality)
-const supportsBackground = computed(() => currentGPTGenerateCapabilities.value.supportsBackground)
-const supportsOutputFormat = computed(() => currentGPTGenerateCapabilities.value.supportsOutputFormat)
+const supportsQuality = computed(() => currentGPTRequestCapabilities.value.supportsQuality)
+const supportsBackground = computed(() => currentGPTRequestCapabilities.value.supportsBackground)
+const supportsOutputFormat = computed(() => currentGPTRequestCapabilities.value.supportsOutputFormat)
 const supportsCompression = computed(() =>
-  currentGPTGenerateCapabilities.value.supportsCompression &&
+  currentGPTRequestCapabilities.value.supportsCompression &&
   (formGPT.value.outputFormat === 'jpeg' || formGPT.value.outputFormat === 'webp')
 )
-const supportsMultiple = computed(() => currentGPTGenerateCapabilities.value.supportsMultiple)
-const supportsEdit = computed(() => currentGPTCapabilities.value.supportsEdit)
-const supportsFlexibleGPTSize = computed(() => currentGPTGenerateCapabilities.value.supportsFlexibleSize)
-const supportsModeration = computed(() => currentGPTGenerateCapabilities.value.supportsModeration)
+const supportsMultiple = computed(() => currentGPTRequestCapabilities.value.supportsMultiple)
+const supportsEdit = computed(() =>
+  isGPTResponsesMode.value ? GPT_RESPONSES_CAPABILITIES.supportsEdit : currentGPTCapabilities.value.supportsEdit
+)
+const supportsFlexibleGPTSize = computed(() => currentGPTRequestCapabilities.value.supportsFlexibleSize)
+const supportsModeration = computed(() => currentGPTRequestCapabilities.value.supportsModeration)
 const showGPTCustomSizeInput = computed(() =>
   supportsFlexibleGPTSize.value && formGPT.value.size === 'custom'
 )
@@ -615,6 +632,16 @@ const gptReferenceImageUrlsText = computed({
       .slice(0, 10)
   }
 })
+const gptReferenceImageFileIdsText = computed({
+  get: () => gptReferenceImageFileIds.value.join('\n'),
+  set: (value: string) => {
+    gptReferenceImageFileIds.value = value
+      .split(/\r?\n/)
+      .map(item => item.trim())
+      .filter(Boolean)
+      .slice(0, 10)
+  }
+})
 
 const gptResponsesConversationStatusLabel = computed(() =>
   responsesConversationActive.value
@@ -623,8 +650,8 @@ const gptResponsesConversationStatusLabel = computed(() =>
 )
 const gptResponsesConversationHint = computed(() =>
   responsesConversationActive.value
-    ? t('dalle.responses.continuationHint')
-    : t('dalle.responses.modeHint')
+    ? t(gptMode.value === 'edit' ? 'dalle.responses.continuationHintEdit' : 'dalle.responses.continuationHint')
+    : t(gptMode.value === 'edit' ? 'dalle.responses.modeHintEdit' : 'dalle.responses.modeHint')
 )
 const gptResponsesTurnLabel = computed(() =>
   t('dalle.responses.currentTurn', { count: responsesTurnCount.value })
@@ -824,12 +851,14 @@ function resetGPTResponsesConversation(options: { silent?: boolean } = {}) {
     responsesConversationActive.value ||
     responsesTurnCount.value > 0 ||
     Boolean(responsesPreviousResponseId.value) ||
-    Boolean(responsesLastResponseId.value)
+    Boolean(responsesLastResponseId.value) ||
+    Boolean(responsesLastImageGenerationCallId.value)
 
   responsesConversationActive.value = false
   responsesPreviousResponseId.value = null
   responsesTurnCount.value = 0
   responsesLastResponseId.value = null
+  responsesLastImageGenerationCallId.value = null
 
   if (hadConversation && !options.silent) {
     message.info(t('dalle.responses.reset'))
@@ -844,6 +873,10 @@ function validateGPTRequest(): string | null {
 
     if (gptEditInputSource.value === 'url' && gptReferenceImageUrls.value.length === 0) {
       return t('dalle.referenceImageUrlsRequired')
+    }
+
+    if (gptEditInputSource.value === 'file-id' && gptReferenceImageFileIds.value.length === 0) {
+      return t('dalle.referenceImageFileIdsRequired')
     }
   }
 
@@ -916,17 +949,112 @@ function appendGPTResponsesToolOptions(tool: Record<string, any>) {
   }
 }
 
-function buildGPTResponsesRequestBody(options: { stream?: boolean } = {}) {
+async function buildGPTResponsesEditInputContent(): Promise<Array<Record<string, any>>> {
+  const content: Array<Record<string, any>> = [
+    {
+      type: 'input_text',
+      text: formGPT.value.prompt
+    }
+  ]
+
+  if (isContinuingGPTResponsesConversation.value && responsesLastImageGenerationCallId.value) {
+    content.push({
+      type: 'image_generation_call',
+      id: responsesLastImageGenerationCallId.value
+    })
+  }
+
+  if (gptEditInputSource.value === 'upload') {
+    const uploadPayload = await prepareGPTEditUploadPayload()
+    const maskDataUrl = uploadPayload.mask ? await fileToDataUrl(uploadPayload.mask) : null
+
+    for (let index = 0; index < uploadPayload.images.length; index += 1) {
+      const file = uploadPayload.images[index]
+      const inputImage: GPTResponsesInputImage = {
+        type: 'input_image',
+        image_url: await fileToDataUrl(file)
+      }
+
+      if (index === 0 && maskDataUrl) {
+        inputImage.input_image_mask = {
+          image_url: maskDataUrl
+        }
+      }
+
+      content.push(inputImage)
+    }
+
+    return content
+  }
+
+  if (gptEditInputSource.value === 'url') {
+    gptReferenceImageUrls.value.forEach((imageUrl, index) => {
+      const inputImage: GPTResponsesInputImage = {
+        type: 'input_image',
+        image_url: imageUrl
+      }
+
+      if (index === 0 && gptMaskUrl.value.trim()) {
+        inputImage.input_image_mask = {
+          image_url: gptMaskUrl.value.trim()
+        }
+      }
+
+      content.push(inputImage)
+    })
+
+    return content
+  }
+
+  gptReferenceImageFileIds.value.forEach((fileId, index) => {
+    const inputImage: GPTResponsesInputImage = {
+      type: 'input_image',
+      file_id: fileId
+    }
+
+    if (index === 0 && gptMaskFileId.value.trim()) {
+      inputImage.input_image_mask = {
+        file_id: gptMaskFileId.value.trim()
+      }
+    }
+
+    content.push(inputImage)
+  })
+
+  return content
+}
+
+async function buildGPTResponsesRequestBody(options: {
+  stream?: boolean
+  mode?: 'generate' | 'edit'
+} = {}) {
+  const mode = options.mode || gptMode.value
   const tool: Record<string, any> = {
     type: 'image_generation'
   }
+
+  tool.action = mode === 'edit'
+    ? 'edit'
+    : isContinuingGPTResponsesConversation.value
+      ? 'auto'
+      : 'generate'
 
   appendGPTResponsesToolOptions(tool)
 
   const body: Record<string, any> = {
     model: GPT_RESPONSES_MODEL,
-    input: formGPT.value.prompt,
     tools: [tool]
+  }
+
+  if (mode === 'edit') {
+    body.input = [
+      {
+        role: 'user',
+        content: await buildGPTResponsesEditInputContent()
+      }
+    ]
+  } else {
+    body.input = formGPT.value.prompt
   }
 
   if (options.stream) {
@@ -968,11 +1096,8 @@ watch(() => formGPT.value.model, (newModel) => {
 })
 
 watch(gptMode, (mode, previousMode) => {
-  if (mode === 'edit') {
-    if (gptApiMode.value === 'responses-api') {
-      gptApiMode.value = 'image-api'
-    }
-    resetGPTResponsesConversation({ silent: previousMode !== 'generate' })
+  if (mode !== previousMode) {
+    resetGPTResponsesConversation({ silent: true })
   }
 })
 
@@ -1014,14 +1139,26 @@ watch(() => configStore.activePresetId, (currentId, previousId) => {
 watch(gptEditInputSource, (source) => {
   if (source === 'upload') {
     gptReferenceImageUrls.value = []
+    gptReferenceImageFileIds.value = []
     gptMaskUrl.value = ''
-  } else {
-    gptReferenceImages.value = []
-    gptMaskImage.value = null
-    gptUploadedMaskImage.value = null
-    gptMaskUploadKey.value += 1
-    loadGPTMaskReferenceImage(null)
+    gptMaskFileId.value = ''
+    return
   }
+
+  gptReferenceImages.value = []
+  gptMaskImage.value = null
+  gptUploadedMaskImage.value = null
+  gptMaskUploadKey.value += 1
+  loadGPTMaskReferenceImage(null)
+
+  if (source === 'url') {
+    gptReferenceImageFileIds.value = []
+    gptMaskFileId.value = ''
+    return
+  }
+
+  gptReferenceImageUrls.value = []
+  gptMaskUrl.value = ''
 })
 
 watch(gptPrimaryReferenceImage, (file, previousFile) => {
@@ -1076,7 +1213,11 @@ function loadGPTSettings() {
       formGPT.value.n = settings.n || 1
       formGPT.value.moderation = settings.moderation || 'auto'
       gptApiMode.value = settings.apiMode === 'responses-api' ? 'responses-api' : 'image-api'
-      gptEditInputSource.value = settings.editInputSource || 'upload'
+      gptEditInputSource.value = settings.editInputSource === 'file-id'
+        ? 'file-id'
+        : settings.editInputSource === 'url'
+          ? 'url'
+          : 'upload'
     } catch {
       // Ignore
     }
@@ -1191,7 +1332,7 @@ const previewStatusText = computed(() => {
 
 const previewEmptyTitle = computed(() => {
   if (mainTab.value === 'gpt-image') {
-    return isGPTResponsesApi.value
+    return isGPTResponsesMode.value
       ? t('image.preview.empty.gpt54Title')
       : t('image.preview.empty.gptImage2Title')
   }
@@ -1201,7 +1342,7 @@ const previewEmptyTitle = computed(() => {
 
 const previewEmptyDescription = computed(() => {
   if (mainTab.value === 'gpt-image') {
-    return isGPTResponsesApi.value
+    return isGPTResponsesMode.value
       ? t('image.preview.empty.gpt54Description')
       : t('image.preview.empty.gptImage2Description')
   }
@@ -1274,7 +1415,11 @@ function applyPendingImageReload(item: HistoryItem) {
     formGPT.value.customModel = params.customModel || ''
     gptMode.value = params.mode === 'edit' ? 'edit' : 'generate'
     gptApiMode.value = params.apiMode === 'responses-api' ? 'responses-api' : 'image-api'
-    gptEditInputSource.value = params.editInputSource === 'url' ? 'url' : 'upload'
+    gptEditInputSource.value = params.editInputSource === 'file-id'
+      ? 'file-id'
+      : params.editInputSource === 'url'
+        ? 'url'
+        : 'upload'
     formGPT.value.size = params.sizePreset || params.size || 'auto'
     formGPT.value.customSize = params.customSize || ''
     formGPT.value.quality = params.quality || 'auto'
@@ -1291,7 +1436,11 @@ function applyPendingImageReload(item: HistoryItem) {
     gptReferenceImageUrls.value = gptEditInputSource.value === 'url' && Array.isArray(params.referenceImageUrls)
       ? params.referenceImageUrls.filter(Boolean).slice(0, 10)
       : []
+    gptReferenceImageFileIds.value = gptEditInputSource.value === 'file-id' && Array.isArray(params.referenceImageFileIds)
+      ? params.referenceImageFileIds.filter(Boolean).slice(0, 10)
+      : []
     gptMaskUrl.value = gptEditInputSource.value === 'url' ? (params.maskUrl || '') : ''
+    gptMaskFileId.value = gptEditInputSource.value === 'file-id' ? (params.maskFileId || '') : ''
     resetGPTResponsesConversation({ silent: true })
     normalizeGPTSizeForModel(formGPT.value.model)
     if (gptApiMode.value === 'responses-api') {
@@ -1398,6 +1547,12 @@ async function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  const base64 = await fileToBase64(file)
+  const mimeType = file.type || 'application/octet-stream'
+  return `data:${mimeType};base64,${base64}`
 }
 
 function base64ToBlob(base64: string, mimeType: string): Blob {
@@ -2451,8 +2606,13 @@ function extractGPTImageUrlsFromResponsesResponse(response: any) {
 
   const urls: string[] = []
   let revisedPrompt = ''
+  let imageCallId: string | null = null
 
   for (const item of allImageCalls) {
+    if (typeof item.id === 'string' && item.id) {
+      imageCallId = item.id
+    }
+
     if (typeof item.revised_prompt === 'string' && item.revised_prompt.trim()) {
       revisedPrompt = item.revised_prompt.trim()
     }
@@ -2484,8 +2644,60 @@ function extractGPTImageUrlsFromResponsesResponse(response: any) {
   return {
     urls,
     revisedPrompt,
-    responseId: typeof response?.id === 'string' ? response.id : null
+    responseId: typeof response?.id === 'string' ? response.id : null,
+    imageCallId
   }
+}
+
+async function executeGPTResponsesRequest(
+  buildBody: (options?: { stream?: boolean }) => Promise<Record<string, any>>,
+  sourceSignal: AbortSignal
+) {
+  const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/responses'
+  let response: any
+
+  try {
+    response = await requestGPTResponses(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${configStore.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(await buildBody({ stream: true }))
+    }, sourceSignal)
+  } catch (error) {
+    if (!isGPTImageStreamUnsupportedError(error)) {
+      throw normalizeGPTResponsesError(error)
+    }
+
+    try {
+      response = await requestGPTResponses(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${configStore.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(await buildBody())
+      }, sourceSignal)
+    } catch (fallbackError) {
+      throw normalizeGPTResponsesError(fallbackError)
+    }
+  }
+
+  if (response?.status !== 'completed' || !hasGPTResponsesImageCall(response)) {
+    try {
+      response = await resolveGPTResponsesFinalResponse(response, sourceSignal)
+    } catch (error) {
+      throw normalizeGPTResponsesError(error)
+    }
+  }
+
+  const terminalError = createGPTResponsesTerminalError(response)
+  if (terminalError) {
+    throw normalizeGPTResponsesError(terminalError)
+  }
+
+  return extractGPTImageUrlsFromResponsesResponse(response)
 }
 
 function normalizeGPTResponsesError(error: unknown): Error {
@@ -2548,7 +2760,7 @@ async function handleSubmitGPT() {
   }
 
   errorMessage.value = ''
-  const isResponsesRequest = isGPTResponsesApi.value
+  const isResponsesRequest = isGPTResponsesMode.value
   const continuingResponsesTurn = isResponsesRequest && isContinuingGPTResponsesConversation.value
   const previousPreviewUrls = [...gptImageUrls.value]
   const preserveExistingPreview = continuingResponsesTurn && previousPreviewUrls.length > 0
@@ -2566,113 +2778,82 @@ async function handleSubmitGPT() {
   abortController.value = ctrl
 
   try {
-    let response: any
     let generatedUrls: string[] = []
     let generatedRevisedPrompt = ''
     let responsesResponseId: string | null = null
+    let responsesImageCallId: string | null = null
 
     if (gptMode.value === 'edit') {
-      const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/edits'
-
-      if (gptEditInputSource.value === 'upload') {
-        const fd = new FormData()
-        fd.set('model', actualGPTModel.value)
-        fd.set('prompt', formGPT.value.prompt)
-
-        const uploadPayload = await prepareGPTEditUploadPayload()
-        uploadPayload.images.forEach((file) => {
-          fd.append('image[]', file, file.name)
-        })
-
-        if (uploadPayload.mask) {
-          fd.set('mask', uploadPayload.mask, uploadPayload.mask.name)
-        }
-
-        appendGPTImageOptions(fd)
-
-        response = await requestGPTImageJSON(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${configStore.apiKey}`
-          },
-          body: fd
-        }, ctrl.signal)
-      } else {
-        const body: Record<string, any> = {
-          model: actualGPTModel.value,
-          prompt: formGPT.value.prompt,
-          images: gptReferenceImageUrls.value.map(imageUrl => ({ image_url: imageUrl }))
-        }
-
-        if (gptMaskUrl.value.trim()) {
-          body.mask = { image_url: gptMaskUrl.value.trim() }
-        }
-
-        appendGPTImageOptions(body)
-
-        response = await requestGPTImageJSON(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${configStore.apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        }, ctrl.signal)
-      }
-
-      generatedUrls = extractGPTImageUrlsFromResponse(response)
-    } else {
       if (isResponsesRequest) {
-        const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/responses'
-        const streamBody = buildGPTResponsesRequestBody({ stream: true })
+        const parsedResponse = await executeGPTResponsesRequest(
+          (options) => buildGPTResponsesRequestBody({ ...options, mode: 'edit' }),
+          ctrl.signal
+        )
+        generatedUrls = parsedResponse.urls
+        generatedRevisedPrompt = parsedResponse.revisedPrompt
+        responsesResponseId = parsedResponse.responseId ?? null
+        responsesImageCallId = parsedResponse.imageCallId ?? null
+      } else {
+        const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/edits'
 
-        try {
-          response = await requestGPTResponses(url, {
+        if (gptEditInputSource.value === 'upload') {
+          const fd = new FormData()
+          fd.set('model', actualGPTModel.value)
+          fd.set('prompt', formGPT.value.prompt)
+
+          const uploadPayload = await prepareGPTEditUploadPayload()
+          uploadPayload.images.forEach((file) => {
+            fd.append('image[]', file, file.name)
+          })
+
+          if (uploadPayload.mask) {
+            fd.set('mask', uploadPayload.mask, uploadPayload.mask.name)
+          }
+
+          appendGPTImageOptions(fd)
+
+          const response = await requestGPTImageJSON(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${configStore.apiKey}`
+            },
+            body: fd
+          }, ctrl.signal)
+          generatedUrls = extractGPTImageUrlsFromResponse(response)
+        } else {
+          const body: Record<string, any> = {
+            model: actualGPTModel.value,
+            prompt: formGPT.value.prompt,
+            images: gptReferenceImageUrls.value.map(imageUrl => ({ image_url: imageUrl }))
+          }
+
+          if (gptMaskUrl.value.trim()) {
+            body.mask = { image_url: gptMaskUrl.value.trim() }
+          }
+
+          appendGPTImageOptions(body)
+
+          const response = await requestGPTImageJSON(url, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${configStore.apiKey}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(streamBody)
+            body: JSON.stringify(body)
           }, ctrl.signal)
-        } catch (error) {
-          if (!isGPTImageStreamUnsupportedError(error)) {
-            throw normalizeGPTResponsesError(error)
-          }
-
-          const fallbackBody = buildGPTResponsesRequestBody()
-
-          try {
-            response = await requestGPTResponses(url, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${configStore.apiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(fallbackBody)
-            }, ctrl.signal)
-          } catch (fallbackError) {
-            throw normalizeGPTResponsesError(fallbackError)
-          }
+          generatedUrls = extractGPTImageUrlsFromResponse(response)
         }
-
-        if (response?.status !== 'completed' || !hasGPTResponsesImageCall(response)) {
-          try {
-            response = await resolveGPTResponsesFinalResponse(response, ctrl.signal)
-          } catch (error) {
-            throw normalizeGPTResponsesError(error)
-          }
-        }
-
-        const terminalError = createGPTResponsesTerminalError(response)
-        if (terminalError) {
-          throw normalizeGPTResponsesError(terminalError)
-        }
-
-        const parsedResponse = extractGPTImageUrlsFromResponsesResponse(response)
+      }
+    } else {
+      if (isResponsesRequest) {
+        const parsedResponse = await executeGPTResponsesRequest(
+          (options) => buildGPTResponsesRequestBody({ ...options, mode: 'generate' }),
+          ctrl.signal
+        )
         generatedUrls = parsedResponse.urls
         generatedRevisedPrompt = parsedResponse.revisedPrompt
-        responsesResponseId = parsedResponse.responseId
+        responsesResponseId = parsedResponse.responseId ?? null
+        responsesImageCallId = parsedResponse.imageCallId ?? null
       } else {
         const body: Record<string, any> = {
           model: actualGPTModel.value,
@@ -2697,6 +2878,7 @@ async function handleSubmitGPT() {
           body: JSON.stringify(body)
         }
 
+        let response: any
         try {
           response = await requestGPTImageJSON(url, requestInit, ctrl.signal)
         } catch (error) {
@@ -2730,6 +2912,7 @@ async function handleSubmitGPT() {
       responsesConversationActive.value = true
       responsesPreviousResponseId.value = responsesResponseId
       responsesLastResponseId.value = responsesResponseId
+      responsesLastImageGenerationCallId.value = responsesImageCallId
       responsesTurnCount.value = continuingResponsesTurn ? responsesTurnCount.value + 1 : 1
     }
 
@@ -2755,7 +2938,9 @@ async function handleSubmitGPT() {
       responsesContinued: isResponsesRequest ? continuingResponsesTurn : undefined,
       referenceImages: gptEditInputSource.value === 'upload' ? [...gptReferenceImages.value] : [],
       referenceImageUrls: gptEditInputSource.value === 'url' ? [...gptReferenceImageUrls.value] : [],
-      maskUrl: gptEditInputSource.value === 'url' ? gptMaskUrl.value.trim() : ''
+      referenceImageFileIds: gptEditInputSource.value === 'file-id' ? [...gptReferenceImageFileIds.value] : [],
+      maskUrl: gptEditInputSource.value === 'url' ? gptMaskUrl.value.trim() : '',
+      maskFileId: gptEditInputSource.value === 'file-id' ? gptMaskFileId.value.trim() : ''
     }
     historyStore.addItem({
       type: 'image',
@@ -3544,7 +3729,7 @@ onUnmounted(() => {
                   </NRadioGroup>
                 </NFormItem>
 
-                <NFormItem v-if="gptMode === 'generate'" :label="t('dalle.generationModel')">
+                <NFormItem :label="t('dalle.requestModel')">
                   <div class="gpt-model-card-grid">
                     <button
                       v-for="option in gptGenerationRouteCards"
@@ -3560,24 +3745,24 @@ onUnmounted(() => {
                   </div>
                 </NFormItem>
 
-                <NFormItem v-if="gptMode === 'generate'" :label="t('dalle.currentModel')">
+                <NFormItem v-if="gptMode === 'generate' && !isGPTResponsesMode" :label="t('dalle.currentModel')">
                   <div class="gpt-current-model-card">
                     <div class="gpt-current-model-value">{{ currentGPTGenerateModelLabel }}</div>
                     <div class="form-hint">{{ currentGPTGenerationRouteDescription }}</div>
-                    <div v-if="shouldShowGPT54ZetaTokenWarning" class="gpt-zeta-warning">
-                      {{ t('dalle.responses.zetaTokenWarning') }}
-                    </div>
                   </div>
                 </NFormItem>
 
                 <!-- Model -->
                 <NFormItem :label="t('common.model')">
                   <NSpace vertical style="width: 100%">
-                    <template v-if="isGPTResponsesApi">
+                    <template v-if="isGPTResponsesMode">
                       <div class="responses-model-card">
                         <div class="responses-model-name">{{ gptResponsesModelLabel }}</div>
                         <div v-if="gptModelDescriptionKey" class="model-description">
                           {{ t(gptModelDescriptionKey) }}
+                        </div>
+                        <div v-if="shouldShowGPT54ZetaTokenWarning" class="gpt-zeta-warning">
+                          {{ t('dalle.responses.zetaTokenWarning') }}
                         </div>
                       </div>
                     </template>
@@ -3601,7 +3786,7 @@ onUnmounted(() => {
                   />
                 </NFormItem>
 
-                <NFormItem v-if="isGPTResponsesApi" :label="t('dalle.responses.conversation')">
+                <NFormItem v-if="isGPTResponsesMode" :label="t('dalle.responses.conversation')">
                   <div class="responses-conversation-card">
                     <div class="responses-conversation-meta">
                       <NTag size="small" :type="responsesConversationActive ? 'success' : 'default'">
@@ -3618,12 +3803,20 @@ onUnmounted(() => {
 
                 <!-- Edit Input Source -->
                 <NFormItem v-if="gptMode === 'edit'" :label="t('dalle.editInputSource')">
-                  <NRadioGroup v-model:value="gptEditInputSource">
-                    <NSpace>
+                  <NSpace vertical style="width: 100%">
+                    <NRadioGroup v-model:value="gptEditInputSource">
+                      <NSpace>
                       <NRadio value="upload">{{ t('dalle.editInputSources.upload') }}</NRadio>
                       <NRadio value="url">{{ t('dalle.editInputSources.url') }}</NRadio>
-                    </NSpace>
-                  </NRadioGroup>
+                      <NRadio v-if="isGPTResponsesEditMode" value="file-id">
+                        {{ t('dalle.editInputSources.fileId') }}
+                      </NRadio>
+                      </NSpace>
+                    </NRadioGroup>
+                    <div v-if="isGPTResponsesEditMode" class="form-hint">
+                      {{ t('dalle.responses.editModeHint') }}
+                    </div>
+                  </NSpace>
                 </NFormItem>
 
                 <!-- Reference Images (Edit mode) -->
@@ -3654,6 +3847,21 @@ onUnmounted(() => {
                       :placeholder="t('dalle.referenceImageUrlsPlaceholder')"
                     />
                     <div class="form-hint">{{ t('dalle.referenceImageUrlsHint') }}</div>
+                  </NSpace>
+                </NFormItem>
+
+                <NFormItem
+                  v-if="gptMode === 'edit' && gptEditInputSource === 'file-id' && isGPTResponsesEditMode"
+                  :label="t('dalle.referenceImageFileIds')"
+                >
+                  <NSpace vertical style="width: 100%">
+                    <NInput
+                      v-model:value="gptReferenceImageFileIdsText"
+                      type="textarea"
+                      :rows="4"
+                      :placeholder="t('dalle.referenceImageFileIdsPlaceholder')"
+                    />
+                    <div class="form-hint">{{ t('dalle.referenceImageFileIdsHint') }}</div>
                   </NSpace>
                 </NFormItem>
 
@@ -3824,6 +4032,16 @@ onUnmounted(() => {
                   <NInput
                     v-model:value="gptMaskUrl"
                     :placeholder="t('dalle.maskUrlPlaceholder')"
+                  />
+                </NFormItem>
+
+                <NFormItem
+                  v-if="gptMode === 'edit' && gptEditInputSource === 'file-id' && isGPTResponsesEditMode"
+                  :label="t('dalle.maskFileId')"
+                >
+                  <NInput
+                    v-model:value="gptMaskFileId"
+                    :placeholder="t('dalle.maskFileIdPlaceholder')"
                   />
                 </NFormItem>
 
@@ -4149,7 +4367,7 @@ onUnmounted(() => {
               <div class="responses-preview-meta">
                 <NTag size="small" type="info">{{ currentGPTGenerationRouteLabel }}</NTag>
                 <NTag size="small" round>{{ currentGPTGenerateModelLabel }}</NTag>
-                <template v-if="isGPTResponsesApi">
+                <template v-if="isGPTResponsesMode">
                   <NTag size="small" :type="responsesConversationActive ? 'success' : 'default'">
                     {{ gptResponsesConversationStatusLabel }}
                   </NTag>
@@ -4157,15 +4375,15 @@ onUnmounted(() => {
                 </template>
               </div>
               <div class="responses-preview-hint">
-                {{ isGPTResponsesApi ? gptResponsesConversationHint : gptCurrentModelHint }}
+                {{ isGPTResponsesMode ? gptResponsesConversationHint : gptCurrentModelHint }}
               </div>
-              <div v-if="isGPTResponsesApi && gptRevisedPrompt" class="responses-preview-revised">
+              <div v-if="isGPTResponsesMode && gptRevisedPrompt" class="responses-preview-revised">
                 <div class="responses-preview-revised-title">{{ t('dalle.revisedPrompt') }}</div>
                 <div class="responses-preview-revised-text">{{ gptRevisedPrompt }}</div>
               </div>
             </div>
 
-            <NAlert v-if="gptRevisedPrompt && mainTab === 'gpt-image' && !isGPTResponsesApi" type="info" class="revised-prompt">
+            <NAlert v-if="gptRevisedPrompt && mainTab === 'gpt-image' && !isGPTResponsesMode" type="info" class="revised-prompt">
               <template #header>{{ t('dalle.revisedPrompt') }}</template>
               {{ gptRevisedPrompt }}
             </NAlert>
@@ -4177,7 +4395,7 @@ onUnmounted(() => {
             <div class="preview-stage" :class="{ 'is-empty': !previewHasResult }">
               <NSpin :show="isLoading">
               <!-- GPT-Image Results (multiple images) -->
-              <template v-if="mainTab === 'gpt-image' && gptImageUrls.length > 0 && !isGPTResponsesApi">
+              <template v-if="mainTab === 'gpt-image' && gptImageUrls.length > 0 && !isGPTResponsesMode">
                 <div class="images-grid">
                   <div
                     v-for="(url, idx) in gptImageUrls"

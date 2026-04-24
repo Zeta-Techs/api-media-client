@@ -96,7 +96,7 @@ export interface GPTImageFormData extends BaseImageFormData {
   responsesModel?: string
   responsesTurnCount?: number
   responsesContinued?: boolean
-  editInputSource: 'upload' | 'url'
+  editInputSource: 'upload' | 'url' | 'file-id'
   size: string
   sizePreset: string
   customSize: string
@@ -108,7 +108,9 @@ export interface GPTImageFormData extends BaseImageFormData {
   moderation: string
   referenceImages: File[]
   referenceImageUrls: string[]
+  referenceImageFileIds?: string[]
   maskUrl: string
+  maskFileId?: string
 }
 
 // Flux format
