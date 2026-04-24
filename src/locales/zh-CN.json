@@ -297,6 +297,31 @@
     "mode": "模式",
     "modeGenerate": "生成",
     "modeEdit": "编辑",
+    "responses": {
+      "apiMode": "调用方式",
+      "imageApi": "Image API",
+      "responsesApi": "Responses API",
+      "apiModeHint": "Image API 保留当前生成与编辑流程。Responses API 使用 gpt-5.4，并支持当前页面内的多轮续画。",
+      "modelLabel": "gpt-5.4（Responses API）",
+      "modelDescription": "Responses 图像生成使用 gpt-5.4 主线模型和 image_generation 工具。",
+      "conversation": "当前对话",
+      "newConversation": "新建对话",
+      "modeHint": "首轮点击生成会在当前页面内开启一个新的图片对话。",
+      "continuationHint": "下一次点击生成会基于当前页面里上一轮成功的 Responses API 结果继续追画。",
+      "currentTurn": "当前第 {count} 轮",
+      "reset": "Responses API 对话已重置。",
+      "status": {
+        "new": "新对话",
+        "continuing": "继续追画"
+      },
+      "errors": {
+        "endpointUnsupported": "当前端点似乎不支持 Responses API。",
+        "modelUnsupported": "当前端点似乎不支持 gpt-5.4 图像生成。",
+        "toolUnsupported": "当前端点或模型似乎不支持 image_generation 工具。",
+        "noImageGenerationCall": "Responses API 响应中没有返回 image_generation_call 输出项。",
+        "noImageResult": "Responses API 响应里虽然有 image_generation_call，但没有返回可用的图片结果。"
+      }
+    },
     "prompt": "提示词",
     "promptPlaceholder": "描述你想要生成的图片...",
     "referenceImages": "参考图",

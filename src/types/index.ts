@@ -92,6 +92,10 @@ export interface GeminiVertexFormData extends BaseImageFormData {
 export interface GPTImageFormData extends BaseImageFormData {
   format: 'gpt-image'
   mode: 'generate' | 'edit'
+  apiMode?: 'image-api' | 'responses-api'
+  responsesModel?: string
+  responsesTurnCount?: number
+  responsesContinued?: boolean
   editInputSource: 'upload' | 'url'
   size: string
   sizePreset: string

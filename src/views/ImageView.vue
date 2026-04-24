@@ -38,6 +38,7 @@ const DALLE_SETTINGS_KEY = 'dalle-form-settings'
 const FLUX_SETTINGS_KEY = 'flux-form-settings'
 
 type GPTEditInputSource = 'upload' | 'url'
+type GPTApiMode = 'image-api' | 'responses-api'
 
 interface GPTModelCapabilities {
   description: string
@@ -77,11 +78,20 @@ interface GPTImageResponseItem {
   output_format?: string
 }
 
+interface GPTResponsesImageGenerationCall {
+  type: string
+  id?: string
+  result?: string
+  revised_prompt?: string
+  output_format?: string
+}
+
 const GPT_IMAGE_2_MIN_PIXELS = 655360
 const GPT_IMAGE_2_MAX_PIXELS = 8294400
 const GPT_IMAGE_2_MAX_EDGE = 3840
 const GPT_IMAGE_2_STEP = 16
 const GPT_IMAGE_2_MAX_RATIO = 3
+const GPT_RESPONSES_MODEL = 'gpt-5.4'
 const GPT_MASK_HISTORY_LIMIT = 40
 const GPT_MASK_MIN_ZOOM = 0.08
 const GPT_MASK_MAX_ZOOM = 8
@@ -184,6 +194,20 @@ const GPT_MODEL_CAPABILITIES: Record<string, GPTModelCapabilities> = {
   }
 }
 
+const GPT_RESPONSES_CAPABILITIES: GPTModelCapabilities = {
+  description: 'dalle.responses.modelDescription',
+  supportsEdit: false,
+  supportsQuality: true,
+  supportsBackground: true,
+  supportsTransparentBackground: false,
+  supportsCompression: true,
+  supportsModeration: false,
+  supportsMultiple: false,
+  supportsOutputFormat: true,
+  supportsFlexibleSize: true,
+  defaultSize: 'auto'
+}
+
 // ==================== GPT-Image (DALL·E) Form State ====================
 const formGPT = ref({
   prompt: '',
@@ -200,6 +224,7 @@ const formGPT = ref({
 })
 
 const gptMode = ref<'generate' | 'edit'>('generate')
+const gptApiMode = ref<GPTApiMode>('image-api')
 const gptEditInputSource = ref<GPTEditInputSource>('upload')
 const gptReferenceImages = ref<File[]>([])
 const gptReferenceImageUrls = ref<string[]>([])
@@ -208,6 +233,10 @@ const gptUploadedMaskImage = ref<File | null>(null)
 const gptMaskUrl = ref('')
 const gptImageUrls = ref<string[]>([])
 const gptRevisedPrompt = ref('')
+const responsesConversationActive = ref(false)
+const responsesPreviousResponseId = ref<string | null>(null)
+const responsesTurnCount = ref(0)
+const responsesLastResponseId = ref<string | null>(null)
 const isHydratingGPTSettings = ref(false)
 
 const gptMaskViewportRef = ref<HTMLDivElement | null>(null)
@@ -349,17 +378,30 @@ const isGPTCustomModel = computed(() => formGPT.value.model === 'custom')
 const actualGPTModel = computed(() =>
   isGPTCustomModel.value ? formGPT.value.customModel.trim() : formGPT.value.model
 )
+const isGPTResponsesApi = computed(() =>
+  mainTab.value === 'gpt-image' &&
+  gptMode.value === 'generate' &&
+  gptApiMode.value === 'responses-api'
+)
+const isContinuingGPTResponsesConversation = computed(() =>
+  isGPTResponsesApi.value &&
+  responsesConversationActive.value &&
+  Boolean(responsesPreviousResponseId.value)
+)
 
 const currentGPTCapabilities = computed(() =>
   GPT_MODEL_CAPABILITIES[formGPT.value.model] || GPT_MODEL_CAPABILITIES['gpt-image-2']
 )
+const currentGPTGenerateCapabilities = computed(() =>
+  isGPTResponsesApi.value ? GPT_RESPONSES_CAPABILITIES : currentGPTCapabilities.value
+)
 
 const gptSizeOptions = computed(() => {
-  const options = currentGPTCapabilities.value.supportsFlexibleSize
+  const options = currentGPTGenerateCapabilities.value.supportsFlexibleSize
     ? [...GPT_IMAGE_2_SIZE_OPTIONS]
     : [...(GPT_LEGACY_SIZE_OPTIONS[formGPT.value.model] || GPT_LEGACY_SIZE_OPTIONS['gpt-image-1'])]
 
-  if (currentGPTCapabilities.value.supportsFlexibleSize) {
+  if (currentGPTGenerateCapabilities.value.supportsFlexibleSize) {
     options.push({
       label: t('dalle.customSizeOption'),
       value: 'custom'
@@ -378,10 +420,10 @@ const gptQualityOptions = computed(() => [
 
 const gptBackgroundOptions = computed(() => {
   const options = [{ label: t('dalle.backgroundOptions.auto'), value: 'auto' }]
-  if (currentGPTCapabilities.value.supportsTransparentBackground) {
+  if (currentGPTGenerateCapabilities.value.supportsTransparentBackground) {
     options.push({ label: t('dalle.backgroundOptions.transparent'), value: 'transparent' })
   }
-  if (currentGPTCapabilities.value.supportsBackground) {
+  if (currentGPTGenerateCapabilities.value.supportsBackground) {
     options.push({ label: t('dalle.backgroundOptions.opaque'), value: 'opaque' })
   }
   return options
@@ -401,18 +443,24 @@ const gptModerationOptions = computed(() => [
 const currentGPTModelInfo = computed(() => {
   return gptModelOptions.find(m => m.value === formGPT.value.model)
 })
+const gptResponsesModelLabel = computed(() => t('dalle.responses.modelLabel'))
+const gptModelDescriptionKey = computed(() =>
+  isGPTResponsesApi.value
+    ? GPT_RESPONSES_CAPABILITIES.description
+    : currentGPTModelInfo.value?.description
+)
 
-const supportsQuality = computed(() => currentGPTCapabilities.value.supportsQuality)
-const supportsBackground = computed(() => currentGPTCapabilities.value.supportsBackground)
-const supportsOutputFormat = computed(() => currentGPTCapabilities.value.supportsOutputFormat)
+const supportsQuality = computed(() => currentGPTGenerateCapabilities.value.supportsQuality)
+const supportsBackground = computed(() => currentGPTGenerateCapabilities.value.supportsBackground)
+const supportsOutputFormat = computed(() => currentGPTGenerateCapabilities.value.supportsOutputFormat)
 const supportsCompression = computed(() =>
-  currentGPTCapabilities.value.supportsCompression &&
+  currentGPTGenerateCapabilities.value.supportsCompression &&
   (formGPT.value.outputFormat === 'jpeg' || formGPT.value.outputFormat === 'webp')
 )
-const supportsMultiple = computed(() => currentGPTCapabilities.value.supportsMultiple)
+const supportsMultiple = computed(() => currentGPTGenerateCapabilities.value.supportsMultiple)
 const supportsEdit = computed(() => currentGPTCapabilities.value.supportsEdit)
-const supportsFlexibleGPTSize = computed(() => currentGPTCapabilities.value.supportsFlexibleSize)
-const supportsModeration = computed(() => currentGPTCapabilities.value.supportsModeration)
+const supportsFlexibleGPTSize = computed(() => currentGPTGenerateCapabilities.value.supportsFlexibleSize)
+const supportsModeration = computed(() => currentGPTGenerateCapabilities.value.supportsModeration)
 const showGPTCustomSizeInput = computed(() =>
   supportsFlexibleGPTSize.value && formGPT.value.size === 'custom'
 )
@@ -499,6 +547,20 @@ const gptReferenceImageUrlsText = computed({
       .slice(0, 10)
   }
 })
+
+const gptResponsesConversationStatusLabel = computed(() =>
+  responsesConversationActive.value
+    ? t('dalle.responses.status.continuing')
+    : t('dalle.responses.status.new')
+)
+const gptResponsesConversationHint = computed(() =>
+  responsesConversationActive.value
+    ? t('dalle.responses.continuationHint')
+    : t('dalle.responses.modeHint')
+)
+const gptResponsesTurnLabel = computed(() =>
+  t('dalle.responses.currentTurn', { count: responsesTurnCount.value })
+)
 
 const gptPrimaryReferenceImage = computed(() => gptReferenceImages.value[0] ?? null)
 
@@ -661,6 +723,48 @@ function validateGPTImage2Size(size: string): string | null {
   return getGPTImage2SizeValidationErrorFromDimensions(dims)
 }
 
+function normalizeGPTSizeForResponsesApi() {
+  if (formGPT.value.size === 'custom') {
+    if (formGPT.value.customSize && validateGPTImage2Size(formGPT.value.customSize) === null) {
+      return
+    }
+
+    formGPT.value.size = GPT_RESPONSES_CAPABILITIES.defaultSize
+    formGPT.value.customSize = ''
+    return
+  }
+
+  if (formGPT.value.size === 'auto' || isPresetGPTSize(formGPT.value.size)) {
+    return
+  }
+
+  if (validateGPTImage2Size(formGPT.value.size) === null) {
+    formGPT.value.customSize = formGPT.value.size
+    formGPT.value.size = 'custom'
+    return
+  }
+
+  formGPT.value.size = GPT_RESPONSES_CAPABILITIES.defaultSize
+  formGPT.value.customSize = ''
+}
+
+function resetGPTResponsesConversation(options: { silent?: boolean } = {}) {
+  const hadConversation =
+    responsesConversationActive.value ||
+    responsesTurnCount.value > 0 ||
+    Boolean(responsesPreviousResponseId.value) ||
+    Boolean(responsesLastResponseId.value)
+
+  responsesConversationActive.value = false
+  responsesPreviousResponseId.value = null
+  responsesTurnCount.value = 0
+  responsesLastResponseId.value = null
+
+  if (hadConversation && !options.silent) {
+    message.info(t('dalle.responses.reset'))
+  }
+}
+
 function validateGPTRequest(): string | null {
   if (gptMode.value === 'edit') {
     if (gptEditInputSource.value === 'upload' && gptReferenceImages.value.length === 0) {
@@ -722,6 +826,47 @@ function appendGPTImageOptions(
   }
 }
 
+function appendGPTResponsesToolOptions(tool: Record<string, any>) {
+  if (resolvedGPTSize.value !== 'auto') {
+    tool.size = resolvedGPTSize.value
+  }
+
+  if (formGPT.value.quality !== 'auto') {
+    tool.quality = formGPT.value.quality
+  }
+
+  if (formGPT.value.background === 'opaque') {
+    tool.background = 'opaque'
+  }
+
+  if (formGPT.value.outputFormat === 'jpeg' || formGPT.value.outputFormat === 'webp') {
+    tool.output_format = formGPT.value.outputFormat
+    tool.output_compression = formGPT.value.outputCompression
+  }
+}
+
+function buildGPTResponsesRequestBody() {
+  const tool: Record<string, any> = {
+    type: 'image_generation',
+    action: isContinuingGPTResponsesConversation.value ? 'auto' : 'generate'
+  }
+
+  appendGPTResponsesToolOptions(tool)
+
+  const body: Record<string, any> = {
+    model: GPT_RESPONSES_MODEL,
+    input: formGPT.value.prompt,
+    tool_choice: { type: 'image_generation' },
+    tools: [tool]
+  }
+
+  if (isContinuingGPTResponsesConversation.value && responsesPreviousResponseId.value) {
+    body.previous_response_id = responsesPreviousResponseId.value
+  }
+
+  return body
+}
+
 // Watch GPT model changes
 watch(() => formGPT.value.model, (newModel) => {
   normalizeGPTSizeForModel(newModel)
@@ -748,6 +893,28 @@ watch(() => formGPT.value.model, (newModel) => {
   saveGPTSettings()
 })
 
+watch(gptMode, (mode, previousMode) => {
+  if (mode === 'edit') {
+    if (gptApiMode.value === 'responses-api') {
+      gptApiMode.value = 'image-api'
+    }
+    resetGPTResponsesConversation({ silent: previousMode !== 'generate' })
+  }
+})
+
+watch(gptApiMode, (mode, previousMode) => {
+  if (mode === 'responses-api') {
+    normalizeGPTSizeForResponsesApi()
+    if (formGPT.value.background === 'transparent') {
+      formGPT.value.background = 'auto'
+    }
+  }
+
+  if (previousMode === 'responses-api' && mode !== 'responses-api') {
+    resetGPTResponsesConversation({ silent: true })
+  }
+})
+
 watch(() => formGPT.value.size, (newSize, oldSize) => {
   if (
     newSize === 'custom' &&
@@ -755,6 +922,18 @@ watch(() => formGPT.value.size, (newSize, oldSize) => {
     !parsedGPTCustomSize.value
   ) {
     formGPT.value.customSize = '1024x1024'
+  }
+})
+
+watch(mainTab, (tab, previousTab) => {
+  if (previousTab === 'gpt-image' && tab !== 'gpt-image') {
+    resetGPTResponsesConversation({ silent: true })
+  }
+})
+
+watch(() => configStore.activePresetId, (currentId, previousId) => {
+  if (previousId && currentId !== previousId) {
+    resetGPTResponsesConversation({ silent: true })
   }
 })
 
@@ -784,6 +963,10 @@ watch(formGPT, () => {
   saveGPTSettings()
 }, { deep: true })
 
+watch([gptEditInputSource, gptApiMode], () => {
+  saveGPTSettings()
+})
+
 function saveGPTSettings() {
   const settings = {
     model: formGPT.value.model,
@@ -796,6 +979,7 @@ function saveGPTSettings() {
     outputCompression: formGPT.value.outputCompression,
     n: formGPT.value.n,
     moderation: formGPT.value.moderation,
+    apiMode: gptApiMode.value,
     editInputSource: gptEditInputSource.value
   }
   localStorage.setItem(DALLE_SETTINGS_KEY, JSON.stringify(settings))
@@ -817,12 +1001,19 @@ function loadGPTSettings() {
       formGPT.value.outputCompression = settings.outputCompression ?? 100
       formGPT.value.n = settings.n || 1
       formGPT.value.moderation = settings.moderation || 'auto'
+      gptApiMode.value = settings.apiMode === 'responses-api' ? 'responses-api' : 'image-api'
       gptEditInputSource.value = settings.editInputSource || 'upload'
     } catch {
       // Ignore
     }
   }
   normalizeGPTSizeForModel(formGPT.value.model)
+  if (gptApiMode.value === 'responses-api') {
+    normalizeGPTSizeForResponsesApi()
+    if (formGPT.value.background === 'transparent') {
+      formGPT.value.background = 'auto'
+    }
+  }
   isHydratingGPTSettings.value = false
 }
 
@@ -1735,6 +1926,82 @@ function extractGPTImageUrlsFromResponse(response: any): string[] {
   return urls
 }
 
+function extractGPTImageUrlsFromResponsesResponse(response: any) {
+  const output = Array.isArray(response?.output) ? response.output : []
+  const imageCalls = output.filter((item: any): item is GPTResponsesImageGenerationCall =>
+    item?.type === 'image_generation_call'
+  )
+
+  if (imageCalls.length === 0) {
+    throw new Error(t('dalle.responses.errors.noImageGenerationCall'))
+  }
+
+  const urls: string[] = []
+  let revisedPrompt = ''
+
+  for (const item of imageCalls) {
+    if (typeof item.revised_prompt === 'string' && item.revised_prompt.trim()) {
+      revisedPrompt = item.revised_prompt.trim()
+    }
+
+    if (typeof item.result === 'string' && item.result.trim()) {
+      const mimeType = item.output_format
+        ? getMimeTypeFromOutputFormat(item.output_format)
+        : getMimeTypeFromOutputFormat(formGPT.value.outputFormat)
+      const blob = base64ToBlob(item.result, mimeType)
+      urls.push(URL.createObjectURL(blob))
+    }
+  }
+
+  if (urls.length === 0) {
+    throw new Error(t('dalle.responses.errors.noImageResult'))
+  }
+
+  return {
+    urls,
+    revisedPrompt,
+    responseId: typeof response?.id === 'string' ? response.id : null
+  }
+}
+
+function normalizeGPTResponsesError(error: unknown): Error {
+  if (!(error instanceof Error)) {
+    return new Error(String(error))
+  }
+
+  const messageText = error.message || ''
+
+  if (/API 404|API 405|not found|no route|unknown path|unsupported endpoint/i.test(messageText)) {
+    return new Error(t('dalle.responses.errors.endpointUnsupported'))
+  }
+
+  if (
+    /image_generation|tool_choice|tool/i.test(messageText) &&
+    /unsupported|not supported|unknown|unrecognized|invalid/i.test(messageText)
+  ) {
+    return new Error(t('dalle.responses.errors.toolUnsupported'))
+  }
+
+  if (
+    /gpt-5\.4|model/i.test(messageText) &&
+    /unsupported|not supported|not found|does not exist|unknown/i.test(messageText)
+  ) {
+    return new Error(t('dalle.responses.errors.modelUnsupported'))
+  }
+
+  return error
+}
+
+function revokeGPTImageUrls(urls: string[]) {
+  urls.forEach(url => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      // Ignore remote URLs and already released object URLs.
+    }
+  })
+}
+
 // ==================== GPT-Image Submit ====================
 async function handleSubmitGPT() {
   if (!configStore.apiKey) {
@@ -1757,10 +2024,18 @@ async function handleSubmitGPT() {
   }
 
   errorMessage.value = ''
-  gptRevisedPrompt.value = ''
-  gptImageUrls.value.forEach(url => URL.revokeObjectURL(url))
-  gptImageUrls.value = []
-  imageUrl.value = ''
+  const isResponsesRequest = isGPTResponsesApi.value
+  const continuingResponsesTurn = isResponsesRequest && isContinuingGPTResponsesConversation.value
+  const previousPreviewUrls = [...gptImageUrls.value]
+  const preserveExistingPreview = continuingResponsesTurn && previousPreviewUrls.length > 0
+
+  if (!preserveExistingPreview) {
+    gptRevisedPrompt.value = ''
+    revokeGPTImageUrls(previousPreviewUrls)
+    gptImageUrls.value = []
+    imageUrl.value = ''
+  }
+
   isLoading.value = true
 
   const ctrl = new AbortController()
@@ -1768,6 +2043,9 @@ async function handleSubmitGPT() {
 
   try {
     let response: any
+    let generatedUrls: string[] = []
+    let generatedRevisedPrompt = ''
+    let responsesResponseId: string | null = null
 
     if (gptMode.value === 'edit') {
       const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/edits'
@@ -1817,49 +2095,89 @@ async function handleSubmitGPT() {
           body: JSON.stringify(body)
         }, ctrl.signal)
       }
+
+      generatedUrls = extractGPTImageUrlsFromResponse(response)
     } else {
-      const body: Record<string, any> = {
-        model: actualGPTModel.value,
-        prompt: formGPT.value.prompt
-      }
+      if (isResponsesRequest) {
+        const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/responses'
+        const body = buildGPTResponsesRequestBody()
 
-      appendGPTImageOptions(body, { includeMultiple: true })
-
-      const shouldUseGPTImageStream = actualGPTModel.value === 'gpt-image-2'
-      if (shouldUseGPTImageStream) {
-        body.stream = true
-        body.partial_images = 0
-      }
-
-      const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/generations'
-      const requestInit = {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${configStore.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      }
-
-      try {
-        response = await requestGPTImageJSON(url, requestInit, ctrl.signal)
-      } catch (error) {
-        if (!shouldUseGPTImageStream || !isGPTImageStreamUnsupportedError(error)) {
-          throw error
+        try {
+          response = await requestGPTImageJSON(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${configStore.apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }, ctrl.signal)
+        } catch (error) {
+          throw normalizeGPTResponsesError(error)
         }
 
-        delete body.stream
-        delete body.partial_images
-        response = await requestGPTImageJSON(url, {
-          ...requestInit,
+        const parsedResponse = extractGPTImageUrlsFromResponsesResponse(response)
+        generatedUrls = parsedResponse.urls
+        generatedRevisedPrompt = parsedResponse.revisedPrompt
+        responsesResponseId = parsedResponse.responseId
+      } else {
+        const body: Record<string, any> = {
+          model: actualGPTModel.value,
+          prompt: formGPT.value.prompt
+        }
+
+        appendGPTImageOptions(body, { includeMultiple: true })
+
+        const shouldUseGPTImageStream = actualGPTModel.value === 'gpt-image-2'
+        if (shouldUseGPTImageStream) {
+          body.stream = true
+          body.partial_images = 0
+        }
+
+        const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/generations'
+        const requestInit = {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${configStore.apiKey}`,
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify(body)
-        }, ctrl.signal)
+        }
+
+        try {
+          response = await requestGPTImageJSON(url, requestInit, ctrl.signal)
+        } catch (error) {
+          if (!shouldUseGPTImageStream || !isGPTImageStreamUnsupportedError(error)) {
+            throw error
+          }
+
+          delete body.stream
+          delete body.partial_images
+          response = await requestGPTImageJSON(url, {
+            ...requestInit,
+            body: JSON.stringify(body)
+          }, ctrl.signal)
+        }
+
+        generatedUrls = extractGPTImageUrlsFromResponse(response)
       }
     }
 
-    const urls = extractGPTImageUrlsFromResponse(response)
-    gptImageUrls.value = urls
-    imageUrl.value = urls[0]
+    gptImageUrls.value = generatedUrls
+    imageUrl.value = generatedUrls[0] || ''
+    if (isResponsesRequest) {
+      gptRevisedPrompt.value = generatedRevisedPrompt
+    }
+
+    if (preserveExistingPreview) {
+      revokeGPTImageUrls(previousPreviewUrls)
+    }
+
+    if (isResponsesRequest) {
+      responsesConversationActive.value = true
+      responsesPreviousResponseId.value = responsesResponseId
+      responsesLastResponseId.value = responsesResponseId
+      responsesTurnCount.value = continuingResponsesTurn ? responsesTurnCount.value + 1 : 1
+    }
 
     const gptParams: GPTImageFormData = {
       prompt: formGPT.value.prompt,
@@ -1877,6 +2195,10 @@ async function handleSubmitGPT() {
       outputCompression: formGPT.value.outputCompression,
       n: formGPT.value.n,
       moderation: formGPT.value.moderation,
+      apiMode: isResponsesRequest ? 'responses-api' : 'image-api',
+      responsesModel: isResponsesRequest ? GPT_RESPONSES_MODEL : undefined,
+      responsesTurnCount: isResponsesRequest ? responsesTurnCount.value : undefined,
+      responsesContinued: isResponsesRequest ? continuingResponsesTurn : undefined,
       referenceImages: gptEditInputSource.value === 'upload' ? [...gptReferenceImages.value] : [],
       referenceImageUrls: gptEditInputSource.value === 'url' ? [...gptReferenceImageUrls.value] : [],
       maskUrl: gptEditInputSource.value === 'url' ? gptMaskUrl.value.trim() : ''
@@ -1886,7 +2208,7 @@ async function handleSubmitGPT() {
       status: 'completed',
       params: gptParams,
       result: {
-        thumbnail: gptImageUrls.value[0]?.substring(0, 100)
+        thumbnail: generatedUrls[0]?.substring(0, 100)
       }
     })
 
@@ -2323,7 +2645,7 @@ onUnmounted(() => {
   abortController.value?.abort()
   if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
   if (fluxImageUrl.value) URL.revokeObjectURL(fluxImageUrl.value)
-  gptImageUrls.value.forEach(url => URL.revokeObjectURL(url))
+  revokeGPTImageUrls(gptImageUrls.value)
   if (gptMaskReferenceObjectUrl.value) URL.revokeObjectURL(gptMaskReferenceObjectUrl.value)
 })
 </script>
@@ -2668,14 +2990,36 @@ onUnmounted(() => {
                   </NRadioGroup>
                 </NFormItem>
 
+                <NFormItem v-if="gptMode === 'generate'" :label="t('dalle.responses.apiMode')">
+                  <NSpace vertical style="width: 100%">
+                    <NRadioGroup v-model:value="gptApiMode">
+                      <NSpace>
+                        <NRadio value="image-api">{{ t('dalle.responses.imageApi') }}</NRadio>
+                        <NRadio value="responses-api">{{ t('dalle.responses.responsesApi') }}</NRadio>
+                      </NSpace>
+                    </NRadioGroup>
+                    <div class="form-hint">{{ t('dalle.responses.apiModeHint') }}</div>
+                  </NSpace>
+                </NFormItem>
+
                 <!-- Model -->
                 <NFormItem :label="t('common.model')">
                   <NSpace vertical style="width: 100%">
-                    <NSelect v-model:value="formGPT.model" :options="gptModelOptions" />
-                    <NInput v-if="isGPTCustomModel" v-model:value="formGPT.customModel" :placeholder="t('common.custom')" />
-                    <div v-if="currentGPTModelInfo?.description" class="model-description">
-                      {{ t(currentGPTModelInfo.description) }}
-                    </div>
+                    <template v-if="isGPTResponsesApi">
+                      <div class="responses-model-card">
+                        <div class="responses-model-name">{{ gptResponsesModelLabel }}</div>
+                        <div v-if="gptModelDescriptionKey" class="model-description">
+                          {{ t(gptModelDescriptionKey) }}
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <NSelect v-model:value="formGPT.model" :options="gptModelOptions" />
+                      <NInput v-if="isGPTCustomModel" v-model:value="formGPT.customModel" :placeholder="t('common.custom')" />
+                      <div v-if="gptModelDescriptionKey" class="model-description">
+                        {{ t(gptModelDescriptionKey) }}
+                      </div>
+                    </template>
                   </NSpace>
                 </NFormItem>
 
@@ -2687,6 +3031,21 @@ onUnmounted(() => {
                     :rows="4"
                     :placeholder="t('dalle.promptPlaceholder')"
                   />
+                </NFormItem>
+
+                <NFormItem v-if="isGPTResponsesApi" :label="t('dalle.responses.conversation')">
+                  <div class="responses-conversation-card">
+                    <div class="responses-conversation-meta">
+                      <NTag size="small" :type="responsesConversationActive ? 'success' : 'default'">
+                        {{ gptResponsesConversationStatusLabel }}
+                      </NTag>
+                      <NTag size="small" round>{{ gptResponsesTurnLabel }}</NTag>
+                    </div>
+                    <div class="form-hint">{{ gptResponsesConversationHint }}</div>
+                    <NButton size="small" quaternary @click="resetGPTResponsesConversation()">
+                      {{ t('dalle.responses.newConversation') }}
+                    </NButton>
+                  </div>
                 </NFormItem>
 
                 <!-- Edit Input Source -->
@@ -3218,7 +3577,21 @@ onUnmounted(() => {
               {{ t('image.preview.refreshNotice') }}
             </NAlert>
 
-            <NAlert v-if="gptRevisedPrompt && mainTab === 'gpt-image'" type="info" class="revised-prompt">
+            <div v-if="mainTab === 'gpt-image' && isGPTResponsesApi" class="responses-preview-card">
+              <div class="responses-preview-meta">
+                <NTag size="small" :type="responsesConversationActive ? 'success' : 'default'">
+                  {{ gptResponsesConversationStatusLabel }}
+                </NTag>
+                <NTag size="small" round>{{ gptResponsesTurnLabel }}</NTag>
+              </div>
+              <div class="responses-preview-hint">{{ gptResponsesConversationHint }}</div>
+              <div v-if="gptRevisedPrompt" class="responses-preview-revised">
+                <div class="responses-preview-revised-title">{{ t('dalle.revisedPrompt') }}</div>
+                <div class="responses-preview-revised-text">{{ gptRevisedPrompt }}</div>
+              </div>
+            </div>
+
+            <NAlert v-if="gptRevisedPrompt && mainTab === 'gpt-image' && !isGPTResponsesApi" type="info" class="revised-prompt">
               <template #header>{{ t('dalle.revisedPrompt') }}</template>
               {{ gptRevisedPrompt }}
             </NAlert>
@@ -3230,7 +3603,7 @@ onUnmounted(() => {
             <div class="preview-stage" :class="{ 'is-empty': !previewHasResult }">
               <NSpin :show="isLoading">
               <!-- GPT-Image Results (multiple images) -->
-              <template v-if="mainTab === 'gpt-image' && gptImageUrls.length > 0">
+              <template v-if="mainTab === 'gpt-image' && gptImageUrls.length > 0 && !isGPTResponsesApi">
                 <div class="images-grid">
                   <div
                     v-for="(url, idx) in gptImageUrls"
@@ -3247,6 +3620,23 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div class="preview-supporting-text">{{ t('image.preview.clickToZoom') }}</div>
+              </template>
+
+              <template v-else-if="mainTab === 'gpt-image' && gptImageUrls.length > 0">
+                <div class="image-container" @click="openLightbox(0)">
+                  <img :src="gptImageUrls[0]" class="preview-image" alt="Generated" />
+                </div>
+
+                <div class="preview-supporting-text">{{ t('image.preview.clickToZoom') }}</div>
+
+                <NButton
+                  type="primary"
+                  block
+                  style="margin-top: 16px"
+                  @click="handleDownload(0)"
+                >
+                  {{ t('common.download') }}
+                </NButton>
               </template>
 
               <!-- Nano Banana (Gemini-Image) Result (single image) -->
@@ -3508,6 +3898,55 @@ onUnmounted(() => {
 .form-hint {
   font-size: 12px;
   opacity: 0.6;
+}
+
+.responses-model-card,
+.responses-conversation-card,
+.responses-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.1), transparent 40%),
+    rgba(255, 255, 255, 0.02);
+}
+
+.responses-model-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.responses-conversation-meta,
+.responses-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.responses-preview-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.responses-preview-revised {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.responses-preview-revised-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.responses-preview-revised-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .custom-size-editor {

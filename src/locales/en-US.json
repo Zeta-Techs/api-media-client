@@ -298,6 +298,31 @@
     "mode": "Mode",
     "modeGenerate": "Generate",
     "modeEdit": "Edit",
+    "responses": {
+      "apiMode": "API Mode",
+      "imageApi": "Image API",
+      "responsesApi": "Responses API",
+      "apiModeHint": "Image API keeps the current generation and edit flow. Responses API uses gpt-5.4 with page-local follow-up turns.",
+      "modelLabel": "gpt-5.4 (Responses API)",
+      "modelDescription": "Responses image generation uses the gpt-5.4 mainline model with the image_generation tool.",
+      "conversation": "Conversation",
+      "newConversation": "New Conversation",
+      "modeHint": "The first generate request starts a new image conversation in this page.",
+      "continuationHint": "The next generate request will continue from the previous successful Responses API turn in this page.",
+      "currentTurn": "Turn {count}",
+      "reset": "Responses API conversation reset.",
+      "status": {
+        "new": "New conversation",
+        "continuing": "Continuing"
+      },
+      "errors": {
+        "endpointUnsupported": "The current endpoint does not appear to support the Responses API.",
+        "modelUnsupported": "The current endpoint does not appear to support gpt-5.4 image generation.",
+        "toolUnsupported": "The current endpoint or model does not appear to support the image_generation tool.",
+        "noImageGenerationCall": "The Responses API response did not include an image_generation_call output item.",
+        "noImageResult": "The Responses API response included image_generation_call output, but no image result was returned."
+      }
+    },
     "prompt": "Prompt",
     "promptPlaceholder": "Describe the image you want to generate...",
     "referenceImages": "Reference Images",
