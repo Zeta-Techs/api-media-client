@@ -23,6 +23,8 @@ The system SHALL support image generation through multiple AI model providers wi
 - **WHEN** user selects GPT-Image tab, chooses Responses API mode, and provides a prompt
 - **THEN** system calls OpenAI-compatible `/v1/responses`
 - **AND** uses `gpt-5.4` with the `image_generation` tool
+- **AND** prefers `stream = true` so the request stays on a streaming Responses path
+- **AND** falls back to a non-stream Responses request if the endpoint rejects streaming
 - **AND** extracts the generated image from `response.output` items with `type = image_generation_call`
 
 #### Scenario: Flux image generation

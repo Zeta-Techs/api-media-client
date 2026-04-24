@@ -7,6 +7,7 @@
 - [x] 2.3 Update GPT-Image form and preview UI for Responses API mode and conversation controls
 - [x] 2.4 Extend history/type metadata for Responses API generations
 - [x] 2.5 Add localized strings for Responses API mode, conversation status, and new error cases
+- [x] 2.6 Prefer streaming Responses API image generation with non-stream fallback and final-response retrieval
 
 ## 3. Validation
 - [ ] 3.1 Run `openspec validate add-gpt-responses-image-generation --strict`

@@ -92,6 +92,19 @@ interface GPTResponsesImageGenerationCall {
   output_format?: string
 }
 
+interface GPTResponsesOutputTextItem {
+  type?: string
+  text?: string
+  output_text?: string
+  refusal?: string
+  content?: Array<{
+    type?: string
+    text?: string
+    output_text?: string
+    refusal?: string
+  }>
+}
+
 const GPT_IMAGE_2_MIN_PIXELS = 655360
 const GPT_IMAGE_2_MAX_PIXELS = 8294400
 const GPT_IMAGE_2_MAX_EDGE = 3840
@@ -101,6 +114,8 @@ const GPT_RESPONSES_MODEL = 'gpt-5.4'
 const GPT_MASK_HISTORY_LIMIT = 40
 const GPT_MASK_MIN_ZOOM = 0.08
 const GPT_MASK_MAX_ZOOM = 8
+const GPT_RESPONSES_POLL_INTERVAL = 2000
+const GPT_RESPONSES_STREAM_PARTIAL_IMAGES = 0
 
 const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: 'auto', value: 'auto' },
@@ -901,7 +916,7 @@ function appendGPTResponsesToolOptions(tool: Record<string, any>) {
   }
 }
 
-function buildGPTResponsesRequestBody() {
+function buildGPTResponsesRequestBody(options: { stream?: boolean } = {}) {
   const tool: Record<string, any> = {
     type: 'image_generation'
   }
@@ -912,6 +927,11 @@ function buildGPTResponsesRequestBody() {
     model: GPT_RESPONSES_MODEL,
     input: formGPT.value.prompt,
     tools: [tool]
+  }
+
+  if (options.stream) {
+    body.stream = true
+    body.partial_images = GPT_RESPONSES_STREAM_PARTIAL_IMAGES
   }
 
   if (isContinuingGPTResponsesConversation.value && responsesPreviousResponseId.value) {
@@ -2021,6 +2041,124 @@ async function parseGPTImageStreamResponse(res: Response): Promise<{ data: GPTIm
   return { data: completedItems.length > 0 ? completedItems : partialItems }
 }
 
+function mergeGPTResponsesOutputItems(
+  existingItems: any[],
+  appendedItems: GPTResponsesImageGenerationCall[]
+) {
+  const merged = [...existingItems]
+
+  for (const item of appendedItems) {
+    const duplicateIndex = merged.findIndex((existingItem: any) =>
+      (item.id && existingItem?.id === item.id) ||
+      (
+        !item.id &&
+        existingItem?.type === item.type &&
+        existingItem?.revised_prompt === item.revised_prompt &&
+        JSON.stringify(existingItem?.result) === JSON.stringify(item.result)
+      )
+    )
+
+    if (duplicateIndex === -1) {
+      merged.push(item)
+    } else {
+      merged[duplicateIndex] = {
+        ...merged[duplicateIndex],
+        ...item
+      }
+    }
+  }
+
+  return merged
+}
+
+async function parseGPTResponsesStreamResponse(res: Response): Promise<any> {
+  const outputItems: GPTResponsesImageGenerationCall[] = []
+  let responseId: string | null = null
+  let responseStatus = ''
+  let completedResponse: any = null
+
+  const handleStreamBlock = (block: string) => {
+    const event = parseGPTImageStreamBlock(block)
+    if (!event) return
+
+    const payload = event.data
+    const eventType = String(payload?.type || event.eventName || '')
+
+    if (eventType === 'error' || payload?.error) {
+      const message = payload?.error?.message || payload?.message || t('errors.networkError')
+      throw new Error(message)
+    }
+
+    if (typeof payload?.response_id === 'string' && payload.response_id) {
+      responseId = payload.response_id
+    }
+
+    if (typeof payload?.response?.id === 'string' && payload.response.id) {
+      responseId = payload.response.id
+    }
+
+    if (typeof payload?.response?.status === 'string' && payload.response.status) {
+      responseStatus = payload.response.status
+    }
+
+    if (typeof payload?.status === 'string' && payload.status) {
+      responseStatus = payload.status
+    }
+
+    if (eventType === 'response.output_item.done' && payload?.item?.type === 'image_generation_call') {
+      outputItems.push(payload.item)
+      return
+    }
+
+    if (eventType === 'response.completed' && payload?.response) {
+      completedResponse = payload.response
+    }
+  }
+
+  if (!res.body) {
+    const text = await res.text()
+    consumeGPTImageStreamBuffer(text, true, handleStreamBlock)
+  } else {
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      buffer = consumeGPTImageStreamBuffer(buffer, false, handleStreamBlock)
+    }
+
+    buffer += decoder.decode()
+    consumeGPTImageStreamBuffer(buffer, true, handleStreamBlock)
+  }
+
+  if (completedResponse && typeof completedResponse === 'object') {
+    const existingOutput = Array.isArray(completedResponse.output) ? completedResponse.output : []
+    return {
+      ...completedResponse,
+      id: responseId || completedResponse.id || null,
+      status: responseStatus || completedResponse.status || 'completed',
+      output: mergeGPTResponsesOutputItems(existingOutput, outputItems)
+    }
+  }
+
+  if (outputItems.length > 0) {
+    return {
+      id: responseId,
+      status: responseStatus || 'completed',
+      output: outputItems
+    }
+  }
+
+  return {
+    id: responseId,
+    status: responseStatus || '',
+    output: []
+  }
+}
+
 async function requestGPTImageJSON(
   url: string,
   init: RequestInit,
@@ -2070,6 +2208,191 @@ async function requestGPTImageJSON(
   }
 }
 
+async function requestGPTResponses(
+  url: string,
+  init: RequestInit,
+  sourceSignal: AbortSignal
+): Promise<any> {
+  const startedAt = Date.now()
+  const requestController = new AbortController()
+
+  const abortFromSource = () => requestController.abort()
+  if (sourceSignal.aborted) {
+    requestController.abort()
+  } else {
+    sourceSignal.addEventListener('abort', abortFromSource, { once: true })
+  }
+
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: requestController.signal
+    })
+
+    const contentType = res.headers.get('content-type') || ''
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw parseApiError(text, res.status)
+    }
+
+    if (contentType.includes('text/event-stream')) {
+      return await parseGPTResponsesStreamResponse(res)
+    }
+
+    const text = await res.text()
+    return JSON.parse(text)
+  } catch (error) {
+    if (sourceSignal.aborted) {
+      throw error
+    }
+
+    if (isGPTFetchNetworkError(error)) {
+      throw createGPTNetworkError(error, url, startedAt)
+    }
+
+    throw error
+  } finally {
+    sourceSignal.removeEventListener('abort', abortFromSource)
+  }
+}
+
+function delayWithSignal(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      cleanup()
+      resolve()
+    }, ms)
+
+    const handleAbort = () => {
+      cleanup()
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId)
+      signal.removeEventListener('abort', handleAbort)
+    }
+
+    signal.addEventListener('abort', handleAbort, { once: true })
+  })
+}
+
+function extractGPTResponsesOutputText(response: any): string {
+  const output = Array.isArray(response?.output) ? response.output as GPTResponsesOutputTextItem[] : []
+  const parts: string[] = []
+
+  if (typeof response?.error?.message === 'string' && response.error.message.trim()) {
+    parts.push(response.error.message.trim())
+  }
+
+  if (typeof response?.output_text === 'string' && response.output_text.trim()) {
+    parts.push(response.output_text.trim())
+  }
+
+  if (typeof response?.incomplete_details?.reason === 'string' && response.incomplete_details.reason.trim()) {
+    parts.push(response.incomplete_details.reason.trim())
+  }
+
+  for (const item of output) {
+    if (typeof item?.text === 'string' && item.text.trim()) {
+      parts.push(item.text.trim())
+    }
+
+    if (typeof item?.output_text === 'string' && item.output_text.trim()) {
+      parts.push(item.output_text.trim())
+    }
+
+    if (typeof item?.refusal === 'string' && item.refusal.trim()) {
+      parts.push(item.refusal.trim())
+    }
+
+    if (!Array.isArray(item?.content)) continue
+
+    for (const contentItem of item.content) {
+      if (typeof contentItem?.text === 'string' && contentItem.text.trim()) {
+        parts.push(contentItem.text.trim())
+      }
+
+      if (typeof contentItem?.output_text === 'string' && contentItem.output_text.trim()) {
+        parts.push(contentItem.output_text.trim())
+      }
+
+      if (typeof contentItem?.refusal === 'string' && contentItem.refusal.trim()) {
+        parts.push(contentItem.refusal.trim())
+      }
+    }
+  }
+
+  return [...new Set(parts)].join(' ').slice(0, 400)
+}
+
+function hasGPTResponsesImageCall(response: any): boolean {
+  const output = Array.isArray(response?.output) ? response.output : []
+  return output.some((item: any) =>
+    item?.type === 'image_generation_call' ||
+    (Array.isArray(item?.content) && item.content.some((contentItem: any) => contentItem?.type === 'image_generation_call'))
+  )
+}
+
+async function retrieveGPTResponse(
+  responseId: string,
+  sourceSignal: AbortSignal
+): Promise<any> {
+  const url = `${configStore.baseUrl.replace(/\/$/, '')}/v1/responses/${responseId}`
+  return await requestGPTImageJSON(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${configStore.apiKey}`
+    }
+  }, sourceSignal)
+}
+
+async function resolveGPTResponsesFinalResponse(
+  initialResponse: any,
+  sourceSignal: AbortSignal
+): Promise<any> {
+  let response = initialResponse
+
+  while (
+    typeof response?.id === 'string' &&
+    (
+      response?.status === 'queued' ||
+      response?.status === 'in_progress' ||
+      (
+        !hasGPTResponsesImageCall(response) &&
+        !Array.isArray(response?.data) &&
+        (
+          response?.output == null ||
+          (Array.isArray(response?.output) && response.output.length === 0)
+        )
+      )
+    )
+  ) {
+    await delayWithSignal(GPT_RESPONSES_POLL_INTERVAL, sourceSignal)
+    response = await retrieveGPTResponse(response.id, sourceSignal)
+  }
+
+  return response
+}
+
+function createGPTResponsesTerminalError(response: any): Error | null {
+  const status = typeof response?.status === 'string' ? response.status : ''
+  if (!status || status === 'completed') return null
+
+  const diagnosticText = extractGPTResponsesOutputText(response)
+  if (diagnosticText) {
+    return new Error(`${status}: ${diagnosticText}`)
+  }
+
+  return new Error(`Responses API request ended with status: ${status}`)
+}
+
 function extractGPTImageUrlsFromResponse(response: any): string[] {
   const items = Array.isArray(response?.data) ? response.data : []
   const urls: string[] = []
@@ -2109,43 +2432,6 @@ function extractGPTImageUrlsFromResponsesResponse(response: any) {
   ) as GPTResponsesImageGenerationCall[]
   const allImageCalls = [...imageCalls, ...nestedImageCalls]
 
-  const extractResponsesDiagnosticText = () => {
-    const parts: string[] = []
-
-    if (typeof response?.error?.message === 'string' && response.error.message.trim()) {
-      parts.push(response.error.message.trim())
-    }
-
-    if (typeof response?.output_text === 'string' && response.output_text.trim()) {
-      parts.push(response.output_text.trim())
-    }
-
-    for (const item of output) {
-      if (typeof item?.text === 'string' && item.text.trim()) {
-        parts.push(item.text.trim())
-      }
-
-      if (!Array.isArray(item?.content)) continue
-
-      for (const contentItem of item.content) {
-        if (typeof contentItem?.text === 'string' && contentItem.text.trim()) {
-          parts.push(contentItem.text.trim())
-        }
-
-        if (typeof contentItem?.output_text === 'string' && contentItem.output_text.trim()) {
-          parts.push(contentItem.output_text.trim())
-        }
-
-        if (typeof contentItem?.refusal === 'string' && contentItem.refusal.trim()) {
-          parts.push(contentItem.refusal.trim())
-        }
-      }
-    }
-
-    const uniqueParts = [...new Set(parts)]
-    return uniqueParts.join(' ').slice(0, 400)
-  }
-
   if (allImageCalls.length === 0 && Array.isArray(response?.data)) {
     const urls = extractGPTImageUrlsFromResponse(response)
     return {
@@ -2156,7 +2442,7 @@ function extractGPTImageUrlsFromResponsesResponse(response: any) {
   }
 
   if (allImageCalls.length === 0) {
-    const diagnosticText = extractResponsesDiagnosticText()
+    const diagnosticText = extractGPTResponsesOutputText(response)
     if (diagnosticText) {
       throw new Error(`${t('dalle.responses.errors.noImageGenerationCall')} ${diagnosticText}`)
     }
@@ -2188,7 +2474,7 @@ function extractGPTImageUrlsFromResponsesResponse(response: any) {
   }
 
   if (urls.length === 0) {
-    const diagnosticText = extractResponsesDiagnosticText()
+    const diagnosticText = extractGPTResponsesOutputText(response)
     if (diagnosticText) {
       throw new Error(`${t('dalle.responses.errors.noImageResult')} ${diagnosticText}`)
     }
@@ -2338,19 +2624,49 @@ async function handleSubmitGPT() {
     } else {
       if (isResponsesRequest) {
         const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/responses'
-        const body = buildGPTResponsesRequestBody()
+        const streamBody = buildGPTResponsesRequestBody({ stream: true })
 
         try {
-          response = await requestGPTImageJSON(url, {
+          response = await requestGPTResponses(url, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${configStore.apiKey}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(streamBody)
           }, ctrl.signal)
         } catch (error) {
-          throw normalizeGPTResponsesError(error)
+          if (!isGPTImageStreamUnsupportedError(error)) {
+            throw normalizeGPTResponsesError(error)
+          }
+
+          const fallbackBody = buildGPTResponsesRequestBody()
+
+          try {
+            response = await requestGPTResponses(url, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${configStore.apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(fallbackBody)
+            }, ctrl.signal)
+          } catch (fallbackError) {
+            throw normalizeGPTResponsesError(fallbackError)
+          }
+        }
+
+        if (response?.status !== 'completed' || !hasGPTResponsesImageCall(response)) {
+          try {
+            response = await resolveGPTResponsesFinalResponse(response, ctrl.signal)
+          } catch (error) {
+            throw normalizeGPTResponsesError(error)
+          }
+        }
+
+        const terminalError = createGPTResponsesTerminalError(response)
+        if (terminalError) {
+          throw normalizeGPTResponsesError(terminalError)
         }
 
         const parsedResponse = extractGPTImageUrlsFromResponsesResponse(response)
