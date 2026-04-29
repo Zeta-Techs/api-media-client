@@ -116,6 +116,7 @@ const GPT_MASK_MIN_ZOOM = 0.08
 const GPT_MASK_MAX_ZOOM = 8
 const GPT_RESPONSES_POLL_INTERVAL = 2000
 const GPT_RESPONSES_STREAM_PARTIAL_IMAGES = 0
+const gptImageStreamUnsupportedEndpoints = new Set<string>()
 
 const GPT_IMAGE_2_SIZE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: 'auto', value: 'auto' },
@@ -1918,10 +1919,21 @@ function createGPTNetworkError(error: unknown, url: string, startedAt: number) {
 
 function isGPTImageStreamUnsupportedError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
+  const normalizedMessage = message.replace(/\\n/g, '\n')
+  const looksLikeSSEParseFailure =
+    /bad_response_body|syntax error|invalid char/i.test(normalizedMessage) &&
+    /event:\s*(image_generation|response)\./i.test(normalizedMessage)
+
+  if (looksLikeSSEParseFailure) return true
+
   return (
-    /stream|partial_images/i.test(message) &&
-    /unsupported|not supported|unknown|unrecognized|invalid|unexpected/i.test(message)
+    /stream|partial_images|event-stream/i.test(normalizedMessage) &&
+    /unsupported|not supported|unknown|unrecognized|invalid|unexpected|bad_response_body/i.test(normalizedMessage)
   )
+}
+
+function getGPTImageStreamEndpointKey(url: string, model: string) {
+  return `${getSafeGPTEndpoint(url)}|${model}`
 }
 
 function getGPTImageItemsFromStreamPayload(payload: any): GPTImageResponseItem[] {
@@ -2680,13 +2692,16 @@ async function handleSubmitGPT() {
 
         appendGPTImageOptions(body, { includeMultiple: true })
 
-        const shouldUseGPTImageStream = actualGPTModel.value === 'gpt-image-2'
+        const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/generations'
+        const streamEndpointKey = getGPTImageStreamEndpointKey(url, actualGPTModel.value)
+        const shouldUseGPTImageStream =
+          actualGPTModel.value === 'gpt-image-2' &&
+          !gptImageStreamUnsupportedEndpoints.has(streamEndpointKey)
         if (shouldUseGPTImageStream) {
           body.stream = true
           body.partial_images = 0
         }
 
-        const url = configStore.baseUrl.replace(/\/$/, '') + '/v1/images/generations'
         const requestInit = {
           method: 'POST',
           headers: {
@@ -2703,6 +2718,7 @@ async function handleSubmitGPT() {
             throw error
           }
 
+          gptImageStreamUnsupportedEndpoints.add(streamEndpointKey)
           delete body.stream
           delete body.partial_images
           response = await requestGPTImageJSON(url, {
