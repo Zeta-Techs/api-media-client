@@ -84,6 +84,18 @@ interface GPTImageResponseItem {
   output_format?: string
 }
 
+interface GPTImageStreamEvent {
+  eventName: string
+  data: any
+  rawData: string
+}
+
+interface GPTImageNormalizedStreamItem extends GPTImageResponseItem {
+  partial_image_index?: number
+}
+
+type GPTImageStreamFailureKind = 'unsupported_stream_proxy' | null
+
 interface GPTResponsesImageGenerationCall {
   type: string
   id?: string
@@ -1917,14 +1929,21 @@ function createGPTNetworkError(error: unknown, url: string, startedAt: number) {
   }))
 }
 
-function isGPTImageStreamUnsupportedError(error: unknown) {
+function getGPTImageStreamFailureKind(error: unknown): GPTImageStreamFailureKind {
   const message = error instanceof Error ? error.message : String(error)
   const normalizedMessage = message.replace(/\\n/g, '\n')
-  const looksLikeSSEParseFailure =
+  const looksLikeProxyParseFailure =
     /bad_response_body|syntax error|invalid char/i.test(normalizedMessage) &&
     /event:\s*(image_generation|response)\./i.test(normalizedMessage)
 
-  if (looksLikeSSEParseFailure) return true
+  return looksLikeProxyParseFailure ? 'unsupported_stream_proxy' : null
+}
+
+function isGPTImageStreamUnsupportedError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const normalizedMessage = message.replace(/\\n/g, '\n')
+
+  if (getGPTImageStreamFailureKind(error)) return true
 
   return (
     /stream|partial_images|event-stream/i.test(normalizedMessage) &&
@@ -1936,30 +1955,84 @@ function getGPTImageStreamEndpointKey(url: string, model: string) {
   return `${getSafeGPTEndpoint(url)}|${model}`
 }
 
-function getGPTImageItemsFromStreamPayload(payload: any): GPTImageResponseItem[] {
+function getGPTImageStreamEventType(event: GPTImageStreamEvent) {
+  return String(event.data?.type || event.eventName || '')
+}
+
+function normalizeGPTImageResponseItem(item: any): GPTImageNormalizedStreamItem | null {
+  if (!item || (!item.b64_json && !item.url)) return null
+
+  const normalizedItem: GPTImageNormalizedStreamItem = {}
+  if (typeof item.b64_json === 'string' && item.b64_json) {
+    normalizedItem.b64_json = item.b64_json
+  }
+  if (typeof item.url === 'string' && item.url) {
+    normalizedItem.url = item.url
+  }
+  if (typeof item.revised_prompt === 'string' && item.revised_prompt) {
+    normalizedItem.revised_prompt = item.revised_prompt
+  }
+  if (typeof item.output_format === 'string' && item.output_format) {
+    normalizedItem.output_format = item.output_format
+  }
+  if (typeof item.partial_image_index === 'number') {
+    normalizedItem.partial_image_index = item.partial_image_index
+  }
+
+  return normalizedItem
+}
+
+function getGPTImageItemsFromStreamPayload(payload: any): GPTImageNormalizedStreamItem[] {
   if (!payload) return []
 
   if (Array.isArray(payload.data)) {
-    return payload.data.filter((item: any) => item?.b64_json || item?.url)
+    return payload.data
+      .map((item: any) => normalizeGPTImageResponseItem(item))
+      .filter((item: GPTImageNormalizedStreamItem | null): item is GPTImageNormalizedStreamItem => Boolean(item))
   }
 
-  if (payload.b64_json || payload.url) {
-    return [payload]
+  const directItem = normalizeGPTImageResponseItem(payload)
+  if (directItem) {
+    return [directItem]
   }
 
-  if (payload.image?.b64_json || payload.image?.url) {
-    return [payload.image]
+  const imageItem = normalizeGPTImageResponseItem(payload.image)
+  if (imageItem) {
+    return [imageItem]
   }
 
   return []
 }
 
-function parseGPTImageStreamBlock(block: string) {
+function getGPTResponsesPartialImageCallFromStreamPayload(payload: any): GPTResponsesImageGenerationCall | null {
+  const result = typeof payload?.partial_image_b64 === 'string'
+    ? payload.partial_image_b64
+    : typeof payload?.b64_json === 'string'
+      ? payload.b64_json
+      : ''
+
+  if (!result) return null
+
+  return {
+    type: 'image_generation_call',
+    id: typeof payload?.item_id === 'string'
+      ? payload.item_id
+      : typeof payload?.output_index === 'number'
+        ? `partial-image-${payload.output_index}`
+        : undefined,
+    result,
+    output_format: typeof payload?.output_format === 'string' ? payload.output_format : undefined
+  }
+}
+
+function parseGPTImageStreamBlock(block: string): GPTImageStreamEvent | null {
   const lines = block.split(/\n/)
   const dataLines: string[] = []
   let eventName = ''
 
   for (const line of lines) {
+    if (!line || line.startsWith(':')) continue
+
     if (line.startsWith('event:')) {
       eventName = line.slice(6).trim()
     } else if (line.startsWith('data:')) {
@@ -1975,7 +2048,8 @@ function parseGPTImageStreamBlock(block: string) {
   try {
     return {
       eventName,
-      data: JSON.parse(data)
+      data: JSON.parse(data),
+      rawData: data
     }
   } catch {
     return null
@@ -2013,7 +2087,7 @@ async function parseGPTImageStreamResponse(res: Response): Promise<{ data: GPTIm
     const event = parseGPTImageStreamBlock(block)
     if (!event) return
 
-    const eventType = String(event.data?.type || event.eventName || '')
+    const eventType = getGPTImageStreamEventType(event)
     if (eventType === 'error' || event.data?.error) {
       const message = event.data?.error?.message || event.data?.message || t('errors.networkError')
       throw new Error(message)
@@ -2084,6 +2158,7 @@ function mergeGPTResponsesOutputItems(
 
 async function parseGPTResponsesStreamResponse(res: Response): Promise<any> {
   const outputItems: GPTResponsesImageGenerationCall[] = []
+  const partialOutputItems: GPTResponsesImageGenerationCall[] = []
   let responseId: string | null = null
   let responseStatus = ''
   let completedResponse: any = null
@@ -2093,7 +2168,7 @@ async function parseGPTResponsesStreamResponse(res: Response): Promise<any> {
     if (!event) return
 
     const payload = event.data
-    const eventType = String(payload?.type || event.eventName || '')
+    const eventType = getGPTImageStreamEventType(event)
 
     if (eventType === 'error' || payload?.error) {
       const message = payload?.error?.message || payload?.message || t('errors.networkError')
@@ -2114,6 +2189,15 @@ async function parseGPTResponsesStreamResponse(res: Response): Promise<any> {
 
     if (typeof payload?.status === 'string' && payload.status) {
       responseStatus = payload.status
+    }
+
+    if (eventType === 'response.image_generation_call.partial_image') {
+      const partialImageCall = getGPTResponsesPartialImageCallFromStreamPayload(payload)
+      if (partialImageCall) {
+        const mergedPartialItems = mergeGPTResponsesOutputItems(partialOutputItems, [partialImageCall])
+        partialOutputItems.splice(0, partialOutputItems.length, ...mergedPartialItems)
+      }
+      return
     }
 
     if (eventType === 'response.output_item.done' && payload?.item?.type === 'image_generation_call') {
@@ -2147,19 +2231,26 @@ async function parseGPTResponsesStreamResponse(res: Response): Promise<any> {
 
   if (completedResponse && typeof completedResponse === 'object') {
     const existingOutput = Array.isArray(completedResponse.output) ? completedResponse.output : []
+    const streamOutputItems = outputItems.length > 0
+      ? outputItems
+      : hasGPTResponsesImageCall(completedResponse)
+        ? []
+        : partialOutputItems
+
     return {
       ...completedResponse,
       id: responseId || completedResponse.id || null,
       status: responseStatus || completedResponse.status || 'completed',
-      output: mergeGPTResponsesOutputItems(existingOutput, outputItems)
+      output: mergeGPTResponsesOutputItems(existingOutput, streamOutputItems)
     }
   }
 
-  if (outputItems.length > 0) {
+  const streamOutputItems = outputItems.length > 0 ? outputItems : partialOutputItems
+  if (streamOutputItems.length > 0) {
     return {
       id: responseId,
       status: responseStatus || 'completed',
-      output: outputItems
+      output: streamOutputItems
     }
   }
 
@@ -2714,7 +2805,8 @@ async function handleSubmitGPT() {
         try {
           response = await requestGPTImageJSON(url, requestInit, ctrl.signal)
         } catch (error) {
-          if (!shouldUseGPTImageStream || !isGPTImageStreamUnsupportedError(error)) {
+          const streamFailureKind = getGPTImageStreamFailureKind(error)
+          if (!shouldUseGPTImageStream || streamFailureKind !== 'unsupported_stream_proxy') {
             throw error
           }
 
